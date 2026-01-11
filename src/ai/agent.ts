@@ -366,7 +366,9 @@ export async function processMessage(
         return toolResult.replace('NECESITA_CONFIRMACION: ', '');
       }
 
-      // Detectar situaciones de aprendizaje automáticamente
+      // OPTIMIZACIÓN: Aprendizaje automático desactivado temporalmente para mejor performance
+      // TODO: Implementar aprendizaje asíncrono en background
+      /*
       const learningAnalysis = analyzeMessageForLearning(
         userMessage,
         toolName,
@@ -385,6 +387,7 @@ export async function processMessage(
         ).catch(err => console.error('Error guardando observación:', err));
         // No interrumpir el flujo, solo registrar silenciosamente
       }
+      */
 
       // Agregar el resultado de la tool al historial y pedir respuesta final
       messages.push({
