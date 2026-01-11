@@ -27,6 +27,7 @@ import {
   getTodayOrders,
   getClientOrders,
   updateOrderDeadline,
+  getSalesStats,
 } from '../sheets/sales';
 import { parseNaturalDate } from '../utils/dates';
 import {
@@ -340,9 +341,74 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
         return `✅ Agendado. La deuda de ${client.nombre} ($${lastUnpaid.total}) del ${lastUnpaid.fecha} vence el **${deadline}**.`;
       }
 
-      case 'sales_today': {
-        const orders = await getTodayOrders(env);
-        return formatDailySales(orders);
+      case 'sales_stats': {
+        let desde = args.desde;
+        let hasta = args.hasta;
+        const now = new Date();
+        const timezoneOffset = -3; // Argentina UTC-3
+        // Ajustar fecha actual a zona horaria local aprox
+        now.setHours(now.getHours() + timezoneOffset);
+
+        const todayStr = now.toISOString().split('T')[0];
+
+        if (!desde && !hasta && args.periodo) {
+          switch (args.periodo) {
+            case 'hoy':
+              desde = todayStr;
+              break;
+            case 'ayer': {
+              const yesterday = new Date(now);
+              yesterday.setDate(yesterday.getDate() - 1);
+              desde = yesterday.toISOString().split('T')[0];
+              hasta = yesterday.toISOString().split('T')[0];
+              break;
+            }
+            case 'semana_actual': {
+              const day = now.getDay(); // 0 (Domingo) - 6 (Sábado)
+              const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Ajustar al Lunes
+              const monday = new Date(now);
+              monday.setDate(diff);
+              desde = monday.toISOString().split('T')[0];
+              break;
+            }
+            case 'mes_actual': {
+              const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+              desde = startOfMonth.toISOString().split('T')[0];
+              break;
+            }
+            case 'mes_anterior': {
+              const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+              const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+              desde = startOfPrevMonth.toISOString().split('T')[0];
+              hasta = endOfPrevMonth.toISOString().split('T')[0];
+              break;
+            }
+            case 'anio_actual': {
+              const startOfYear = new Date(now.getFullYear(), 0, 1);
+              desde = startOfYear.toISOString().split('T')[0];
+              break;
+            }
+            case 'historico':
+            default:
+              // Sin fechas, trae todo
+              break;
+          }
+        }
+
+        const stats = await getSalesStats(env, desde, hasta);
+
+        let msg = `📊 **Estadísticas de Ventas**\n`;
+        if (args.periodo && args.periodo !== 'historico') {
+          msg += `Período: ${args.periodo.replace('_', ' ')}\n`;
+        }
+        if (desde) msg += `Desde: ${desde}\n`;
+        if (hasta) msg += `Hasta: ${hasta}\n`;
+
+        msg += `\n🛒 Cantidad de ventas: ${stats.totalVentas}`;
+        msg += `\n💰 Total facturado: $${stats.totalMonto.toLocaleString('es-AR')}`;
+        msg += `\n📈 Promedio por venta: $${stats.promedioPorVenta.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+
+        return msg;
       }
 
       case 'product_create': {

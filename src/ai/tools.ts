@@ -204,12 +204,26 @@ export const tools = [
   {
     type: "function",
     function: {
-      name: "sales_today",
-      description: "Ver las ventas del día",
+      name: "sales_stats",
+      description: "Ver estadísticas de ventas (cantidad y monto) para un período específico (hoy, ayer, este mes, mes pasado, año, todo).",
       parameters: {
         type: "object",
-        properties: {},
-        required: []
+        properties: {
+          periodo: {
+            type: "string",
+            description: "Período a consultar",
+            enum: ["hoy", "ayer", "semana_actual", "mes_actual", "mes_anterior", "anio_actual", "historico"]
+          },
+          desde: {
+            type: "string",
+            description: "Fecha de inicio manual (YYYY-MM-DD)"
+          },
+          hasta: {
+            type: "string",
+            description: "Fecha de fin manual (YYYY-MM-DD)"
+          }
+        },
+        required: ["periodo"]
       }
     }
   },
