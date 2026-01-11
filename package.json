@@ -6,9 +6,16 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "verify-sheets": "tsx scripts/verify-sheets.ts"
   },
-  "keywords": ["telegram", "bot", "cloudflare", "workers", "ai"],
+  "keywords": [
+    "telegram",
+    "bot",
+    "cloudflare",
+    "workers",
+    "ai"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -16,6 +23,9 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240129.0",
+    "@types/node": "^25.0.6",
+    "dotenv": "^17.2.3",
+    "tsx": "^4.21.0",
     "typescript": "^5.3.3",
     "wrangler": "^3.78.12"
   }

@@ -289,7 +289,51 @@ export async function processMessage(
       max_tokens: 500,
     });
 
-    // Si el modelo quiere usar una tool
+    console.log('Response from AI:', JSON.stringify(response).substring(0, 500));
+
+    // Verificar si la respuesta contiene un JSON de tool call como texto
+    // (a veces el modelo lo devuelve como texto en lugar de tool_calls estructurado)
+    if (response.response || response.content) {
+      const textResponse = response.response || response.content || '';
+
+      // Intentar detectar si es un JSON de tool call
+      if (textResponse.includes('"name"') && textResponse.includes('"parameters"')) {
+        try {
+          // Buscar el JSON completo (puede tener objetos anidados)
+          const startIdx = textResponse.indexOf('{');
+          if (startIdx !== -1) {
+            // Encontrar el cierre del JSON balanceando llaves
+            let depth = 0;
+            let endIdx = startIdx;
+            for (let i = startIdx; i < textResponse.length; i++) {
+              if (textResponse[i] === '{') depth++;
+              if (textResponse[i] === '}') depth--;
+              if (depth === 0) {
+                endIdx = i + 1;
+                break;
+              }
+            }
+
+            const jsonStr = textResponse.substring(startIdx, endIdx);
+            const toolCallData = JSON.parse(jsonStr);
+
+            if (toolCallData.name && toolCallData.parameters) {
+              console.log('Detected tool call in text response:', toolCallData);
+
+              // Ejecutar la tool manualmente
+              const toolResult = await executeTool(env, toolCallData.name, toolCallData.parameters);
+
+              // Retornar el resultado directamente (ya formateado)
+              return toolResult;
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing tool call from text:', e);
+        }
+      }
+    }
+
+    // Si el modelo quiere usar una tool (formato estructurado)
     if (response.tool_calls && response.tool_calls.length > 0) {
       const toolCall = response.tool_calls[0];
       const toolName = toolCall.name;
