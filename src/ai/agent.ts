@@ -24,6 +24,7 @@ import {
 import {
   registerSale,
   getTodayOrders,
+  getClientOrders,
 } from '../sheets/sales';
 import {
   getAllDebts,
@@ -370,17 +371,50 @@ ${product.descripcion ? `Descripción: ${product.descripcion}\n` : ''}${product.
         if (phone.length === 10) { // Ej: 11 1234 5678
           finalPhone = `549${phone}`;
         } else if (phone.startsWith('15')) { // Ej: 15 1234 5678
-          finalPhone = `549${phone.substring(2)}`; // Asumir que falta cod area, o es local. Mejor advertir si es ambiguo.
-          // Para simplificar, si empieza con 15, asumimos que faltó el cod area. 
-          // PERO CUIDADO: "15" es prefijo movil local. 
-          // Mejor dejarlo como está si el usuario no puso cod pais, pero WhatsApp necesita cod pais.
-          // Asumamos formato internacional si es largo, o agregamos 549 si parece local.
+          finalPhone = `549${phone.substring(2)}`;
         }
 
-        const encodedMessage = encodeURIComponent(args.mensaje || '');
+        // Obtener detalles de deuda para armar el mensaje
+        const orders = await getClientOrders(env, client.id);
+        const unpaidOrders = orders.filter(o => !o.pagado);
+        const allProducts = await getAllProducts(env);
+
+        let finalMessage = args.mensaje || '';
+
+        // Si hay deuda y el mensaje parece ser un recordatorio (o si el usuario pide detalles)
+        if (unpaidOrders.length > 0) {
+          const intro = `Hola ${client.nombre}! 👋 Quería recordarte que tenés un saldo pendiente:`;
+
+          const details = unpaidOrders.map(order => {
+            const itemsStr = order.items.map(item => {
+              const product = allProducts.find(p => p.id === item.producto);
+              // Normalizar nombre para que sea amigable
+              const prodName = product ? `${product.nombre} ${product.color} ${product.talle}` : 'Producto';
+              return `${item.cantidad} ${prodName}`;
+            }).join(', ');
+
+            return `🗓 ${order.fecha}: ${itemsStr} -> $${order.total.toLocaleString('es-AR')}`;
+          }).join('\n');
+
+          const totalDeuda = unpaidOrders.reduce((sum, o) => sum + o.total, 0);
+
+          // Si el usuario ya puso un mensaje específico, lo usamos como cabecera o nota
+          // Si el mensaje es muy genérico ("recordale la deuda"), usamos nuestro formato completo
+          const userMsgLower = (args.mensaje || '').toLowerCase();
+          if (!args.mensaje || userMsgLower.includes('deuda') || userMsgLower.includes('vence') || userMsgLower.includes('recorda')) {
+            finalMessage = `${intro}\n\n${details}\n\nTotal: $${totalDeuda.toLocaleString('es-AR')}\n\nCualquier duda avisame! Gracias 🙌`;
+
+            // Si el usuario agregó una nota específica (ej: "que se vence mañana"), la agregamos al final
+            if (args.mensaje && !userMsgLower.includes('recorda')) {
+              finalMessage += `\n(${args.mensaje})`;
+            }
+          }
+        }
+
+        const encodedMessage = encodeURIComponent(finalMessage);
         const link = `https://wa.me/${finalPhone}?text=${encodedMessage}`;
 
-        return `📱 Link generado para ${client.nombre}:\n\n[Enviar mensaje por WhatsApp](${link})`;
+        return `📱 Link generado para ${client.nombre}:\n\n[Enviar mensaje por WhatsApp](${link})\n\nMensaje generado:\n${finalMessage}`;
       }
 
       default:
