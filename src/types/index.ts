@@ -53,6 +53,7 @@ export interface Order {
   total: number;
   estado: string;
   pagado: boolean;
+  vencimiento?: string;
 }
 
 export interface Payment {

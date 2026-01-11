@@ -190,8 +190,11 @@ export const tools = [
             description: "Lista de productos vendidos (con color y talle si aplica)"
           },
           pagado: {
-            type: "boolean",
             description: "SOLO incluir si el usuario lo dijo explícitamente. true='pagó', 'efectivo', 'tarjeta'. NO incluir si no lo dijo."
+          },
+          vencimiento: {
+            type: "string",
+            description: "Fecha de vencimiento de la deuda si el usuario la indica (ej: '2024-05-10', 'en 7 días')."
           }
         },
         required: ["cliente", "items"]
@@ -340,6 +343,27 @@ export const tools = [
           }
         },
         required: ["cliente", "mensaje"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "order_update_deadline",
+      description: "Actualizar la fecha de vencimiento de una deuda/pedido. Usar cuando el bot pregunte '¿Cuándo vence esta deuda?' y el usuario responda.",
+      parameters: {
+        type: "object",
+        properties: {
+          cliente: {
+            type: "string",
+            description: "Nombre del cliente"
+          },
+          vencimiento: {
+            type: "string",
+            description: "Fecha de vencimiento (ej: '2024-05-10', 'en 7 días', 'próximo viernes')"
+          }
+        },
+        required: ["cliente", "vencimiento"]
       }
     }
   }

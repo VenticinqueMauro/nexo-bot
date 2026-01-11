@@ -25,7 +25,9 @@ import {
   registerSale,
   getTodayOrders,
   getClientOrders,
+  updateOrderDeadline,
 } from '../sheets/sales';
+import { parseNaturalDate } from '../utils/dates';
 import {
   getAllDebts,
   getClientDebt,
@@ -89,6 +91,11 @@ function requiresToolExecution(message: string): { requires: boolean; suggestedT
   // Patrones que requieren whatsapp_reminder
   if (/(mand|envi|record).*mensaje|(mand|envi|record)ale.*a.*(que|deuda|cobro)|l[ií]nk.*(wa|whatsapp)/.test(msg)) {
     return { requires: true, suggestedTool: 'whatsapp_reminder' };
+  }
+
+  // Patrones que requieren order_update_deadline
+  if (/(venc|fech|plazo).*(deuda|pago)|(vence|caduca).*(el|en)/.test(msg)) {
+    return { requires: true, suggestedTool: 'order_update_deadline' };
   }
 
   return { requires: false };
@@ -266,11 +273,21 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
           }
         }
 
+        // Parsear fecha de vencimiento si viene
+        let vencimiento: string | undefined = undefined;
+        if (args.vencimiento) {
+          const parsed = parseNaturalDate(args.vencimiento);
+          if (parsed) {
+            vencimiento = parsed;
+          }
+        }
+
         const order = await registerSale(
           env,
           args.cliente,
           items,
-          pagado
+          pagado,
+          vencimiento
         );
 
         const allProducts = await getAllProducts(env);
@@ -279,10 +296,47 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
         if (pagado) {
           message += `\n\n✓ Venta registrada y PAGADA ($${order.total.toLocaleString('es-AR')})\nStock actualizado.`;
         } else {
-          message += `\n\n✓ Venta registrada en CUENTA CORRIENTE\nDeuda: $${order.total.toLocaleString('es-AR')}\nStock actualizado.`;
+          message += `\n\n✓ Venta registrada en CUENTA CORRIENTE\nDeuda: $${order.total.toLocaleString('es-AR')}`;
+
+          if (vencimiento) {
+            message += `\n📅 Vence el: ${vencimiento}`;
+          } else {
+            message += `\n\n⚠️ ¿Cuándo vence esta deuda? (Respondé "en 7 días", "el 20", etc)`;
+          }
+
+          message += `\nStock actualizado.`;
         }
 
         return message;
+      }
+
+      case 'order_update_deadline': {
+        const client = await findClient(env, args.cliente);
+        if (!client) {
+          return `No se encontró el cliente "${args.cliente}".`;
+        }
+
+        // Buscar última deuda sin fecha de vencimiento o la más reciente
+        const orders = await getClientOrders(env, client.id);
+        // Filtrar impagas
+        const unpaidOrders = orders.filter(o => !o.pagado);
+
+        if (unpaidOrders.length === 0) {
+          return `${client.nombre} no tiene deudas pendientes para asignar vencimiento.`;
+        }
+
+        // Tomar la última
+        const lastUnpaid = unpaidOrders[unpaidOrders.length - 1];
+
+        // Parsear fecha
+        const deadline = parseNaturalDate(args.vencimiento);
+        if (!deadline) {
+          return `No pude entender la fecha "${args.vencimiento}". Probá con "en 7 días" o "20/05".`;
+        }
+
+        await updateOrderDeadline(env, lastUnpaid.id, deadline);
+
+        return `✅ Agendado. La deuda de ${client.nombre} ($${lastUnpaid.total}) del ${lastUnpaid.fecha} vence el **${deadline}**.`;
       }
 
       case 'sales_today': {

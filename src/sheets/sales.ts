@@ -19,6 +19,7 @@ interface OrderRow {
   Total: string;
   Estado: string;
   Pagado: string;
+  Vencimiento: string;
 }
 
 /**
@@ -37,6 +38,7 @@ export async function getAllOrders(env: Env): Promise<Order[]> {
     total: parseFloat(row.Total || '0'),
     estado: row.Estado || 'entregado',
     pagado: row.Pagado?.toLowerCase() === 'si',
+    vencimiento: row.Vencimiento && row.Vencimiento !== '-' ? row.Vencimiento : undefined,
   }));
 }
 
@@ -64,7 +66,8 @@ export async function registerSale(
   env: Env,
   clienteNombre: string,
   items: OrderItem[],
-  pagado: boolean = false
+  pagado: boolean = false,
+  vencimiento?: string
 ): Promise<Order> {
   // Buscar o validar cliente
   const client = await findClient(env, clienteNombre);
@@ -118,6 +121,7 @@ export async function registerSale(
     total.toString(),
     'entregado',
     pagado ? 'si' : 'no',
+    vencimiento || '-', // Columna Vencimiento
   ]);
 
   return {
@@ -129,6 +133,7 @@ export async function registerSale(
     total,
     estado: 'entregado',
     pagado,
+    vencimiento,
   };
 }
 
@@ -149,6 +154,32 @@ export async function updateOrderPaymentStatus(
 
   const row = rows[rowIndex];
   row[7] = pagado ? 'si' : 'no'; // Columna Pagado
+
+  await updateRow(env, 'Pedidos', rowIndex + 1, row);
+}
+
+/**
+ * Actualiza la fecha de vencimiento de un pedido
+ */
+export async function updateOrderDeadline(
+  env: Env,
+  orderId: string,
+  vencimiento: string
+): Promise<void> {
+  const rows = await getSheetValues(env, 'Pedidos');
+  const rowIndex = rows.findIndex((row, idx) => idx > 0 && row[0] === orderId);
+
+  if (rowIndex === -1) {
+    throw new Error(`No se encontró el pedido con ID ${orderId}`);
+  }
+
+  const row = rows[rowIndex];
+  // Asegurarnos que el array tenga longitud suficiente (si la columna vencimiento es nueva)
+  while (row.length < 9) {
+    row.push('');
+  }
+
+  row[8] = vencimiento; // Columna Vencimiento (índice 8)
 
   await updateRow(env, 'Pedidos', rowIndex + 1, row);
 }
