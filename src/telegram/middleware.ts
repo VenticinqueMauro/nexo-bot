@@ -2,16 +2,19 @@ import { Context, NextFunction } from 'grammy';
 import { Env } from '../types';
 
 /**
- * Middleware para verificar que solo el dueño puede usar el bot
+ * Middleware para verificar que solo usuarios autorizados pueden usar el bot
+ * Soporta múltiples IDs separados por comas en OWNER_TELEGRAM_ID
  */
 export function authMiddleware(env: Env) {
   return async (ctx: Context, next: NextFunction) => {
     const userId = ctx.from?.id.toString();
-    const ownerId = env.OWNER_TELEGRAM_ID;
 
-    if (userId !== ownerId) {
+    // Soportar múltiples IDs separados por comas
+    const authorizedIds = env.OWNER_TELEGRAM_ID.split(',').map(id => id.trim());
+
+    if (!authorizedIds.includes(userId || '')) {
       console.log(`Usuario no autorizado intentó usar el bot: ${userId}`);
-      await ctx.reply('❌ No estás autorizado para usar este bot.');
+      await ctx.reply('❌ No estás autorizado para usar este bot.\n\nSi necesitás acceso, contactá al administrador.');
       return;
     }
 

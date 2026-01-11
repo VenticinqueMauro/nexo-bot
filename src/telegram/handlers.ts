@@ -24,6 +24,22 @@ import {
 } from './inline-keyboards';
 
 /**
+ * Handler para el comando /whoami - Muestra el ID del usuario
+ */
+export async function handleWhoami(ctx: Context) {
+  const userId = ctx.from?.id;
+  const username = ctx.from?.username || ctx.from?.first_name || 'Usuario';
+
+  await ctx.reply(
+    `👤 *Tu información de Telegram:*\n\n` +
+    `• ID de Usuario: \`${userId}\`\n` +
+    `• Nombre: ${username}\n\n` +
+    `Compartí este ID con el administrador para obtener acceso al bot.`,
+    { parse_mode: 'Markdown' }
+  );
+}
+
+/**
  * Handler para el comando /start
  */
 export async function handleStart(ctx: Context) {

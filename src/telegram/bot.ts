@@ -16,6 +16,7 @@ import {
   handleMessage,
   handleVoice,
   handlePhoto,
+  handleWhoami,
 } from './handlers';
 import { handleCallbackQuery } from './callback-handlers';
 
@@ -34,6 +35,7 @@ export function createBot(env: Env): Bot {
   // Comandos
   bot.command('start', handleStart);
   bot.command('help', handleHelp);
+  bot.command('whoami', handleWhoami);
   bot.command('stock', (ctx) => handleStock(ctx, env));
   bot.command('deudas', (ctx) => handleDeudas(ctx, env));
   bot.command('hoy', (ctx) => handleHoy(ctx, env));
