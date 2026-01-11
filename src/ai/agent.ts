@@ -300,12 +300,20 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           }
         }
 
+        console.log('[DEBUG] Payment Check:', {
+          original: args.pagado,
+          parsed: pagado,
+          userMessage,
+          isBoolean: typeof pagado === 'boolean'
+        });
+
         // 2. Validación Anti-Alucinación (User Message Check)
-        // El modelo a veces manda pagado=true/false sin que el usuario lo diga.
         if (userMessage && typeof pagado === 'boolean') {
           const userMsgLower = userMessage.toLowerCase();
           const explicitCC = ['cuenta corriente', 'cc', 'ctacte', 'c.c.', 'fiado', 'debe', 'no pago', 'sin pagar', 'a cuenta'].some(term => userMsgLower.includes(term));
           const explicitPaid = ['pago', 'pagó', 'pagada', 'pagado', 'efectivo', 'tarjeta', 'transferencia', 'mp', 'mercado pago', 'alias', 'cvu'].some(term => userMsgLower.includes(term));
+
+          console.log('[DEBUG] Keywords:', { explicitCC, explicitPaid, msg: userMsgLower });
 
           if (pagado === false && !explicitCC) {
             console.log('Force confirmation: Model predicted pagado=false but user did not be explicit.');
