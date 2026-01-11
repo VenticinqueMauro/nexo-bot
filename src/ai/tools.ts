@@ -260,6 +260,10 @@ export const tools = [
           stockMinimo: {
             type: "number",
             description: "Stock mínimo para alerta (default: 5)"
+          },
+          fotoId: {
+            type: "string",
+            description: "ID de archivo de Telegram de la foto (si está disponible en el mensaje con [PHOTO_UPLOAD: ID])"
           }
         },
         required: ["nombre", "categoria", "color", "talle", "precio"]

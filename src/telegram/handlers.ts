@@ -267,6 +267,58 @@ export async function handlePhoto(ctx: Context, env: Env) {
   // Guardar el file_id temporalmente
   pendingPhotos.set(userId, fileId);
 
+  const caption = ctx.message?.caption;
+
+  if (caption) {
+    // Si hay caption, procesarla directamente como un mensaje
+    await ctx.replyWithChatAction('typing');
+
+    // Inyectamos el ID de la foto en el mensaje para que el AI lo vea si decide usar una tool
+    // El orden importa: ponemos la foto al final o en un formato que el prompt pueda entender si lo entrenamos, 
+    // o simplemente confiamos en que al usar la tool 'product_create' el AI verá el parámetro 'fotoId'.
+    // Para facilitar, le agregamos una "pista" al mensaje.
+    const messageWithPhoto = `${caption}\n\n[PHOTO_UPLOAD: ${fileId}]`;
+
+    // Obtener historial de conversación
+    const history = conversationHistory.get(userId) || [];
+
+    try {
+      const response = await processMessage(env, messageWithPhoto, history);
+
+      // Actualizar historial
+      history.push(
+        { role: 'user', content: caption }, // Guardamos el caption original en el historial visible
+        { role: 'assistant', content: response }
+      );
+
+      // Limpiar pendingPhotos si se usó (aunque el AI debería haberlo usado)
+      // Lo dejamos por si acaso el AI falla y el usuario quiere reintentar
+      // O podríamos limpiarlo si la respuesta indica éxito.
+      // Por simplicidad, si el AI responde, asumimos que procesó la intención.
+      // Pero si el AI pregunta "¿Qué es esto?", la foto sigue pendiente.
+
+      // Limitar historial
+      if (history.length > 10) {
+        history.splice(0, history.length - 10);
+      }
+      conversationHistory.set(userId, history);
+
+      await ctx.reply(response);
+
+      // Si el AI creó un producto (detectado por texto o algo), podríamos borrar la foto pendiente
+      // Pero pendingPhotos.delete(userId) ya se hace en handleMessage si se asocia manualmente.
+      // Aquí, si el AI usó el tool 'product_create' con fotoId, la foto ya está asociada.
+      // Si el AI no usó la foto, queda pendiente para la próxima interacción.
+      return;
+
+    } catch (error: any) {
+      console.error('Error procesando foto con caption:', error);
+      await ctx.reply('❌ Tuve un problema procesando la foto. ¿Podés intentar de nuevo?');
+      return;
+    }
+  }
+
+  // Si no hay caption, flujo normal (preguntar)
   await ctx.reply(
     '📸 ¡Foto recibida!\n\n' +
     '¿A qué producto pertenece esta foto?\n\n' +

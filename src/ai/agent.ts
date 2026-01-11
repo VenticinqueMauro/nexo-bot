@@ -15,6 +15,7 @@ import {
   getLowStockProducts,
   createProduct,
   searchProducts,
+  updateProductPhoto,
 } from '../sheets/stock';
 import {
   findClient,
@@ -359,12 +360,22 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
           args.stockMinimo || 5
         );
 
+        // Si viene fotoId, asociar la foto
+        if (args.fotoId) {
+          try {
+            await updateProductPhoto(env, product.id, args.fotoId);
+          } catch (e: any) {
+            console.error('Error asociando foto al crear producto:', e);
+            // No fallamos la operación completa, solo logueamos
+          }
+        }
+
         return `✓ Producto creado exitosamente:
 ${product.nombre} ${product.color} ${product.talle}
 SKU: ${product.sku}
 Precio: ${formatPrice(product.precio)}
 Stock inicial: ${product.stock}
-${product.descripcion ? `Descripción: ${product.descripcion}\n` : ''}${product.temporada ? `Temporada: ${product.temporada}\n` : ''}${product.proveedor ? `Proveedor: ${product.proveedor}` : ''}`;
+${product.descripcion ? `Descripción: ${product.descripcion}\n` : ''}${product.temporada ? `Temporada: ${product.temporada}\n` : ''}${product.proveedor ? `Proveedor: ${product.proveedor}` : ''}${args.fotoId ? '\n📸 Foto asociada.' : ''}`;
       }
 
       case 'product_search': {
