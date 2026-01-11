@@ -284,12 +284,25 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
         // Solo proceder automáticamente si pagado === true o "true" o "si"
         let pagado = args.pagado;
 
-        if (pagado === undefined) {
-          // Si no viene definido, intentar inferirlo del mensaje solo si es MUY explícito
-          // Pero por seguridad, mejor dejarlo undefined para preguntar
+        // 1. Normalizar string a boolean si viene como texto
+        if (typeof pagado === 'string') {
+          const pagadoLower = pagado.toLowerCase();
+          // Casos positivos
+          if (['true', 'si', 'sí', 'pago', 'pagó', 'efectivo', 'tarjeta', 'transferencia'].some(s => pagadoLower.includes(s))) {
+            pagado = true;
+          }
+          // Casos negativos explícitos
+          else if (['false', 'no', 'cuenta corriente', 'cc', 'ctacte', 'debe', 'fiado'].some(s => pagadoLower.includes(s))) {
+            pagado = false;
+          } else {
+            // Si trae texto raro, dejarlo undefined para que pregunte
+            pagado = undefined;
+          }
         }
 
-        if (userMessage) {
+        // 2. Validación Anti-Alucinación (User Message Check)
+        // El modelo a veces manda pagado=true/false sin que el usuario lo diga.
+        if (userMessage && typeof pagado === 'boolean') {
           const userMsgLower = userMessage.toLowerCase();
           const explicitCC = ['cuenta corriente', 'cc', 'ctacte', 'c.c.', 'fiado', 'debe', 'no pago', 'sin pagar', 'a cuenta'].some(term => userMsgLower.includes(term));
           const explicitPaid = ['pago', 'pagó', 'pagada', 'pagado', 'efectivo', 'tarjeta', 'transferencia', 'mp', 'mercado pago', 'alias', 'cvu'].some(term => userMsgLower.includes(term));
@@ -305,24 +318,9 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           }
         }
 
-        // Si no viene o es null/undefined, PREGUNTAR
+        // 3. Si sigue indefinido, solicitar confirmación al usuario
         if (pagado === undefined || pagado === null) {
           return 'NECESITA_CONFIRMACION:PAGO';
-        }
-
-        if (typeof pagado === 'string') {
-          const pagadoLower = pagado.toLowerCase();
-          // Casos positivos
-          if (['true', 'si', 'sí', 'pago', 'pagó', 'efectivo', 'tarjeta', 'transferencia'].some(s => pagadoLower.includes(s))) {
-            pagado = true;
-          }
-          // Casos negativos explícitos
-          else if (['false', 'no', 'cuenta corriente', 'cc', 'ctacte', 'debe', 'fiado'].some(s => pagadoLower.includes(s))) {
-            pagado = false;
-          } else {
-            // No se entendió -> preguntar
-            return '¿El cliente pagó o va a cuenta corriente? Respondé "pagó" o "cuenta corriente".';
-          }
         }
 
         // Parsear fecha de vencimiento si viene
