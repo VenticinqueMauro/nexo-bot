@@ -23,7 +23,7 @@ export const tools = [
     type: "function",
     function: {
       name: "stock_add",
-      description: "Registrar entrada de mercadería al stock. Usar cuando el usuario dice que llegó/entró mercadería.",
+      description: "SOLO para entrada de mercadería nueva al inventario. Usar cuando la mercadería LLEGA/ENTRA al negocio (proveedor, reposición). SUMA unidades al stock. NO usar para ventas - para ventas usar sale_register.",
       parameters: {
         type: "object",
         properties: {
@@ -165,7 +165,7 @@ export const tools = [
     type: "function",
     function: {
       name: "sale_register",
-      description: "Registrar una venta/pedido",
+      description: "Registrar una VENTA. Usar cuando el usuario dice 'vendí', 'compró', 'llevó'. RESTA unidades del stock, registra la venta en Pedidos, y gestiona el pago. IMPORTANTE: Preguntar siempre el nombre del cliente y si pagó o va a cuenta corriente.",
       parameters: {
         type: "object",
         properties: {

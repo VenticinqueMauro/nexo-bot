@@ -50,6 +50,64 @@ interface Message {
 }
 
 /**
+ * Detecta si el mensaje del usuario requiere una acción de datos
+ */
+function requiresToolExecution(message: string): { requires: boolean; suggestedTool?: string } {
+  const msg = message.toLowerCase();
+
+  // PRIMERO: Patrones que requieren sale_register (ventas) - tiene prioridad sobre stock_add
+  if (/vend[iíoó]|venta|compr[oó]|llev[oó]/.test(msg)) {
+    return { requires: true, suggestedTool: 'sale_register' };
+  }
+
+  // Patrones que requieren stock_add (SOLO entrada de mercadería, NO ventas)
+  if (/suma|agreg|entr[oóa]|lleg[oóa]|recibi/.test(msg) && /unidad|remera|jean|camisa|producto|stock/.test(msg)) {
+    return { requires: true, suggestedTool: 'stock_add' };
+  }
+
+  // Patrones que requieren stock_check
+  if (/cu[aá]nt|stock|hay|tengo|quedan/.test(msg) && /remera|jean|camisa|producto/.test(msg)) {
+    return { requires: true, suggestedTool: 'stock_check' };
+  }
+
+  // Patrones que requieren payment_register
+  if (/pag[oó]|me pag|cobr[eé]/.test(msg)) {
+    return { requires: true, suggestedTool: 'payment_register' };
+  }
+
+  // Patrones que requieren client_add
+  if (/agreg.*cliente|nuevo cliente|registr.*cliente/.test(msg)) {
+    return { requires: true, suggestedTool: 'client_add' };
+  }
+
+  // Patrones que requieren product_create
+  if (/cre[ao].*producto|nuevo producto|agreg.*producto/.test(msg)) {
+    return { requires: true, suggestedTool: 'product_create' };
+  }
+
+  return { requires: false };
+}
+
+/**
+ * Detecta si una respuesta es una "alucinación" que simula ejecutar una acción
+ */
+function isHallucinatedResponse(response: string): boolean {
+  const patterns = [
+    /sumando stock/i,
+    /vendiendo producto/i,
+    /registrando venta/i,
+    /agregando.*unidad/i,
+    /stock actualizado.*\d+.*unidad/i,
+    /voy a (agregar|sumar|registrar|vender)/i,
+    /\*\*sumando/i,
+    /\*\*vendiendo/i,
+    /\*\*registrando/i,
+  ];
+
+  return patterns.some(p => p.test(response));
+}
+
+/**
  * Ejecuta una tool y retorna el resultado
  */
 async function executeTool(env: Env, toolName: string, args: any): Promise<string> {
@@ -306,7 +364,10 @@ export async function processMessage(
       'AI request timeout - el modelo tardó demasiado en responder'
     );
 
-    console.log('Response from AI:', JSON.stringify(response).substring(0, 500));
+    console.log('=== AI RESPONSE ===');
+    console.log('Has tool_calls:', !!response.tool_calls);
+    console.log('Response text:', (response.response || response.content || '').substring(0, 200));
+    console.log('Full response:', JSON.stringify(response).substring(0, 500));
 
     // Verificar si la respuesta contiene un JSON de tool call como texto
     // (a veces el modelo lo devuelve como texto en lugar de tool_calls estructurado)
@@ -361,63 +422,69 @@ export async function processMessage(
       // Ejecutar la tool
       const toolResult = await executeTool(env, toolName, toolArgs);
 
+      console.log('Tool result:', toolResult.substring(0, 200));
+
       // Si necesita confirmación, retornar directamente
       if (toolResult.startsWith('NECESITA_CONFIRMACION:')) {
         return toolResult.replace('NECESITA_CONFIRMACION: ', '');
       }
 
-      // OPTIMIZACIÓN: Aprendizaje automático desactivado temporalmente para mejor performance
-      // TODO: Implementar aprendizaje asíncrono en background
-      /*
-      const learningAnalysis = analyzeMessageForLearning(
-        userMessage,
-        toolName,
-        toolResult
-      );
-
-      if (learningAnalysis.shouldLearn && learningAnalysis.type && learningAnalysis.suggestion) {
-        // Registrar observación automáticamente
-        const context = extractLearningContext(userMessage, toolName, toolArgs, toolResult);
-        await addObservation(
-          env,
-          learningAnalysis.type,
-          context,
-          learningAnalysis.suggestion,
-          userMessage
-        ).catch(err => console.error('Error guardando observación:', err));
-        // No interrumpir el flujo, solo registrar silenciosamente
-      }
-      */
-
-      // Agregar el resultado de la tool al historial y pedir respuesta final
-      messages.push({
-        role: 'assistant',
-        content: response.content || '',
-        tool_calls: response.tool_calls,
-      });
-
-      messages.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        name: toolName,
-        content: toolResult,
-      });
-
-      // Llamar al modelo nuevamente para que genere la respuesta final
-      const finalResponse: any = await withTimeout(
-        env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
-          messages,
-          max_tokens: 150, // Reducido para respuestas más rápidas
-        }),
-        8000,
-        'AI final response timeout'
-      );
-
-      return finalResponse.response || finalResponse.content || toolResult;
+      // CAMBIO CRÍTICO: Devolver directamente el resultado de la tool
+      // sin re-procesarlo por el AI para evitar alucinaciones
+      return toolResult;
     }
 
-    // Si no hay tool calls, devolver la respuesta directa
-    return response.response || response.content || 'No entendí. ¿Podés repetir?';
+    // Si no hay tool calls, verificar si debería haber habido una
+    const textResponse = response.response || response.content || '';
+    const actionCheck = requiresToolExecution(userMessage);
+
+    // Si el mensaje requería una tool pero el modelo no la usó
+    if (actionCheck.requires) {
+      console.log('⚠️ ADVERTENCIA: El mensaje requería tool pero no se ejecutó ninguna');
+      console.log('Mensaje usuario:', userMessage);
+      console.log('Tool sugerida:', actionCheck.suggestedTool);
+      console.log('Respuesta del modelo:', textResponse.substring(0, 100));
+
+      // Detectar si es una respuesta "alucinada"
+      if (isHallucinatedResponse(textResponse)) {
+        console.log('🚨 DETECTADA RESPUESTA ALUCINADA - Reintentando con prompt directo');
+
+        // Reintentar con un prompt más directo
+        const retryMessages: Message[] = [
+          { role: 'system', content: systemPrompt },
+          ...conversationHistory,
+          { role: 'user', content: `IMPORTANTE: Usá la tool ${actionCheck.suggestedTool} para: ${userMessage}. NO respondas con texto, EJECUTÁ la tool.` },
+        ];
+
+        try {
+          const retryResponse: any = await withTimeout(
+            env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+              messages: retryMessages,
+              tools,
+              max_tokens: 200,
+            }),
+            8000,
+            'AI retry timeout'
+          );
+
+          console.log('Retry response:', JSON.stringify(retryResponse).substring(0, 300));
+
+          if (retryResponse.tool_calls && retryResponse.tool_calls.length > 0) {
+            const toolCall = retryResponse.tool_calls[0];
+            console.log(`✓ Retry exitoso - ejecutando tool: ${toolCall.name}`);
+            const toolResult = await executeTool(env, toolCall.name, toolCall.arguments);
+            return toolResult;
+          }
+        } catch (retryError) {
+          console.error('Error en retry:', retryError);
+        }
+
+        // Si el retry también falla, devolver mensaje de error claro
+        return '❌ No pude ejecutar la acción. Por favor, intentá de nuevo siendo más específico (ej: "suma 10 remeras negras M")';
+      }
+    }
+
+    return textResponse || 'No entendí. ¿Podés repetir?';
   } catch (error: any) {
     console.error('Error en processMessage:', error);
     return '❌ Hubo un problema procesando tu mensaje. Intentá de nuevo.';

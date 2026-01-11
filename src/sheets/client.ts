@@ -101,17 +101,31 @@ export async function updateRow(
 
 /**
  * Convierte valores de hoja a array de objetos
+ * Detecta automáticamente la fila de headers (primera fila con datos)
  */
 export function rowsToObjects<T>(rows: any[][]): T[] {
   if (rows.length === 0) return [];
 
-  const headers = rows[0];
-  const dataRows = rows.slice(1);
+  // Encontrar la primera fila con datos (los headers)
+  let headerRowIndex = 0;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i] && rows[i].length > 0 && rows[i].some(cell => cell && cell.toString().trim() !== '')) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+
+  const headers = rows[headerRowIndex];
+  const dataRows = rows.slice(headerRowIndex + 1);
+
+  console.log('Headers encontrados en fila:', headerRowIndex, headers);
 
   return dataRows.map((row) => {
     const obj: any = {};
     headers.forEach((header, index) => {
-      obj[header] = row[index] || '';
+      if (header) { // Solo agregar si el header existe
+        obj[header] = row[index] || '';
+      }
     });
     return obj as T;
   });

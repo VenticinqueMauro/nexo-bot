@@ -32,7 +32,22 @@ interface ProductRow {
  */
 export async function getAllProducts(env: Env): Promise<Product[]> {
   const rows = await getSheetValues(env, 'Productos');
+
+  // Debug: Ver qué filas se obtienen
+  console.log('=== DEBUG PRODUCTOS ===');
+  console.log('Total filas:', rows.length);
+  if (rows.length > 0) {
+    console.log('Headers:', JSON.stringify(rows[0]));
+  }
+  if (rows.length > 1) {
+    console.log('Primera fila de datos:', JSON.stringify(rows[1]));
+  }
+
   const objects = rowsToObjects<ProductRow>(rows);
+  console.log('Productos parseados:', objects.length);
+  if (objects.length > 0) {
+    console.log('Primer producto:', JSON.stringify(objects[0]));
+  }
 
   return objects.map((row) => ({
     id: row.ID || '',
@@ -52,16 +67,45 @@ export async function getAllProducts(env: Env): Promise<Product[]> {
 }
 
 /**
- * Busca productos por nombre (con fuzzy matching)
+ * Busca productos por nombre (con fuzzy matching mejorado)
+ * Busca en: nombre, categoría, y combinaciones con color/talle
  */
 export async function findProducts(env: Env, searchTerm: string): Promise<Product[]> {
   const allProducts = await getAllProducts(env);
   const normalizedSearch = normalizeProductName(searchTerm);
+  const searchLower = searchTerm.toLowerCase().trim();
 
-  return allProducts.filter(p =>
-    fuzzyMatch(normalizedSearch, p.nombre) ||
-    fuzzyMatch(searchTerm, p.nombre)
-  );
+  // Extraer posibles atributos del término de búsqueda
+  const searchWords = searchLower.split(/\s+/);
+
+  return allProducts.filter(p => {
+    const nombreLower = p.nombre.toLowerCase();
+    const categoriaLower = p.categoria.toLowerCase();
+    const colorLower = p.color.toLowerCase();
+    const talleLower = p.talle.toLowerCase();
+
+    // Crear string combinado para búsqueda
+    const combined = `${nombreLower} ${categoriaLower} ${colorLower} ${talleLower}`;
+
+    // Coincidencia directa en nombre o categoría
+    if (fuzzyMatch(normalizedSearch, p.nombre) || fuzzyMatch(searchTerm, p.nombre)) {
+      return true;
+    }
+
+    // Coincidencia en categoría
+    if (fuzzyMatch(searchTerm, p.categoria)) {
+      return true;
+    }
+
+    // Verificar si todas las palabras de búsqueda están en el producto combinado
+    // Esto permite buscar "remera negra" y encontrar producto con nombre="Remera", color="Negro"
+    const allWordsMatch = searchWords.every(word => combined.includes(word));
+    if (allWordsMatch && searchWords.length > 0) {
+      return true;
+    }
+
+    return false;
+  });
 }
 
 /**
@@ -169,7 +213,7 @@ export async function registerStockMovement(
 export async function addStock(
   env: Env,
   nombre: string,
-  cantidad: number,
+  cantidad: number | string,
   color?: string,
   talle?: string,
   notas?: string
@@ -180,7 +224,9 @@ export async function addStock(
     throw new Error(`No se encontró el producto "${nombre}" ${color || ''} ${talle || ''}`);
   }
 
-  const newStock = product.stock + cantidad;
+  // Asegurar que cantidad sea número (puede venir como string del AI)
+  const cantidadNum = typeof cantidad === 'string' ? parseInt(cantidad, 10) : cantidad;
+  const newStock = product.stock + cantidadNum;
 
   // Actualizar stock
   await updateProductStock(env, product.id, newStock);
@@ -189,7 +235,7 @@ export async function addStock(
   await registerStockMovement(env, {
     productoId: product.id,
     productoNombre: `${product.nombre} ${product.color} ${product.talle}`,
-    cantidad,
+    cantidad: cantidadNum,
     tipo: 'entrada',
     notas: notas || 'Entrada manual',
   });
