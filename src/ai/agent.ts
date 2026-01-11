@@ -225,16 +225,32 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
       }
 
       case 'sale_register': {
+        // Parsear items si viene como string JSON (el AI a veces lo envía así)
+        let items = args.items;
+        if (typeof items === 'string') {
+          try {
+            items = JSON.parse(items);
+          } catch (e) {
+            return '❌ Error: No pude interpretar los productos. Intentá de nuevo con formato: "vendí X [producto] a [cliente]"';
+          }
+        }
+
+        // Parsear pagado a boolean
+        let pagado = args.pagado;
+        if (typeof pagado === 'string') {
+          pagado = pagado.toLowerCase() === 'true' || pagado.toLowerCase() === 'si';
+        }
+
         // Nota: pagado debe ser especificado por el usuario
-        if (args.pagado === undefined) {
+        if (pagado === undefined) {
           return 'NECESITA_CONFIRMACION: ¿El cliente pagó o va a cuenta corriente?';
         }
 
         const order = await registerSale(
           env,
           args.cliente,
-          args.items,
-          args.pagado
+          items,
+          pagado
         );
 
         const allProducts = await getAllProducts(env);
