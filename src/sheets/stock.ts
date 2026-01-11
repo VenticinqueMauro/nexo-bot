@@ -82,6 +82,10 @@ export async function findProducts(env: Env, searchTerm: string): Promise<Produc
 
   // Extraer posibles atributos del término de búsqueda
   const searchWords = searchLower.split(/\s+/);
+  // Simple plural handling: also check singular version if word ends in 's'
+  const searchWordsVariants = searchWords.flatMap(w =>
+    w.endsWith('s') && w.length > 3 ? [w, w.slice(0, -1)] : [w]
+  );
 
   return allProducts.filter(p => {
     const nombreLower = p.nombre.toLowerCase();
@@ -92,19 +96,29 @@ export async function findProducts(env: Env, searchTerm: string): Promise<Produc
     // Crear string combinado para búsqueda
     const combined = `${nombreLower} ${categoriaLower} ${colorLower} ${talleLower}`;
 
-    // Coincidencia directa en nombre o categoría
+    // Coincidencia directa en nombre o categoría (usando variants también)
     if (fuzzyMatch(normalizedSearch, p.nombre) || fuzzyMatch(searchTerm, p.nombre)) {
       return true;
     }
 
-    // Coincidencia en categoría
+    // Check variants for category match
+    if (searchWordsVariants.some(w => w.length > 3 && fuzzyMatch(w, p.categoria))) {
+      return true;
+    }
+
+    // Coincidencia en categoría direct
     if (fuzzyMatch(searchTerm, p.categoria)) {
       return true;
     }
 
     // Verificar si todas las palabras de búsqueda están en el producto combinado
     // Esto permite buscar "remera negra" y encontrar producto con nombre="Remera", color="Negro"
-    const allWordsMatch = searchWords.every(word => combined.includes(word));
+    // Usamos los variants para ser más flexibles (ej: "remeras" -> "remera")
+    const allWordsMatch = searchWords.every(word => {
+      const variants = word.endsWith('s') && word.length > 3 ? [word, word.slice(0, -1)] : [word];
+      return variants.some(v => combined.includes(v));
+    });
+
     if (allWordsMatch && searchWords.length > 0) {
       return true;
     }
@@ -374,14 +388,30 @@ export async function createProduct(
   }
 
   // Verificar si ya existe un producto igual
-  const existing = await findExactProduct(env, nombre, categoria, color, talle);
+  const allProducts = await getAllProducts(env);
+  const existing = allProducts.find(p =>
+    p.nombre.toLowerCase() === nombre.toLowerCase() &&
+    p.categoria.toLowerCase() === categoria.toLowerCase() &&
+    p.color.toLowerCase() === color.toLowerCase() &&
+    p.talle.toLowerCase() === talle.toLowerCase()
+  );
+
   if (existing) {
     throw new Error(`Ya existe un producto: ${existing.nombre} ${existing.color} ${existing.talle} (SKU: ${existing.sku})`);
   }
 
   // Generar ID y SKU
   const id = generateId('P');
-  const sku = generateSKU(categoria, color, talle);
+  let sku = generateSKU(categoria, color, talle);
+
+  // Asegurar unicidad del SKU
+  // Si falta SKU, le agregamos sufijo numérico o parte del ID
+  const skuExists = allProducts.some(p => p.sku === sku);
+  if (skuExists) {
+    // Intentar agregar sufijo -2, -3, etc si es común, pero mejor usar ID corto para garantizar unicidad
+    // O simplemente usar los últimos 4 del ID
+    sku = `${sku}-${id.substring(id.length - 4)}`;
+  }
 
   // Crear fila
   const row = [

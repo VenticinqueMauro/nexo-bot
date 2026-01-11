@@ -151,7 +151,8 @@ export function formatOrder(order: Order, products: Product[]): string {
   order.items.forEach(item => {
     const product = products.find(p => p.id === item.producto || p.nombre.toLowerCase().includes(item.producto.toLowerCase()));
     const price = product ? product.precio * item.cantidad : 0;
-    message += `- ${item.cantidad} ${item.producto} ${item.color || ''} ${item.talle || ''}: ${formatPrice(price)}\n`;
+    const productName = product ? product.nombre : item.producto;
+    message += `- ${item.cantidad} ${productName} ${item.color || ''} ${item.talle || ''}: ${formatPrice(price)}\n`;
   });
 
   message += `\nTotal: ${formatPrice(order.total)}`;
