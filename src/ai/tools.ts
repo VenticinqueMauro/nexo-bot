@@ -51,6 +51,18 @@ export const tools = [
   {
     type: "function",
     function: {
+      name: "client_list",
+      description: "Listar todos los clientes registrados",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "client_search",
       description: "Buscar información de un cliente por nombre",
       parameters: {

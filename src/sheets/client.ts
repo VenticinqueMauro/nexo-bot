@@ -71,7 +71,7 @@ export async function appendRow(
 ): Promise<void> {
   await sheetsRequest(
     env,
-    `/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED`,
+    `/values/${encodeURIComponent(sheetName)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
       method: 'POST',
       body: JSON.stringify({

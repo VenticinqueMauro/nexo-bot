@@ -12,6 +12,7 @@ import {
 import {
   findClient,
   addClient,
+  getAllClients,
 } from '../sheets/clients';
 import {
   registerSale,
@@ -71,6 +72,25 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
           args.talle
         );
         return `✓ Registrado. Stock de ${result.product.nombre} ${result.product.color} ${result.product.talle} actualizado: ${result.newStock} (+${args.cantidad})`;
+      }
+
+      case 'client_list': {
+        const allClients = await getAllClients(env);
+
+        if (allClients.length === 0) {
+          return 'No hay clientes registrados todavía.';
+        }
+
+        let message = `📋 Clientes registrados (${allClients.length}):\n\n`;
+        allClients.forEach((client, index) => {
+          message += `${index + 1}. ${client.nombre}`;
+          if (client.telefono) {
+            message += ` - Tel: ${client.telefono}`;
+          }
+          message += '\n';
+        });
+
+        return message.trim();
       }
 
       case 'client_search': {
