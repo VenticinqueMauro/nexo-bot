@@ -14,7 +14,7 @@ export interface Env {
 // Tipos de Google Sheets
 export interface Product {
   id: string;
-  sku?: string;
+  sku: string;
   nombre: string;
   categoria: string;
   color: string;

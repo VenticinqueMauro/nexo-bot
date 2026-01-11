@@ -77,16 +77,16 @@ export async function registerSale(
   const processedItems: OrderItem[] = [];
 
   for (const item of items) {
-    const product = await findProduct(env, item.producto, item.presentacion);
+    const product = await findProduct(env, item.producto, item.color, item.talle);
 
     if (!product) {
-      throw new Error(`No se encontró el producto "${item.producto}" ${item.presentacion || ''}`);
+      throw new Error(`No se encontró el producto "${item.producto}" ${item.color || ''} ${item.talle || ''}`);
     }
 
     // Verificar stock disponible
     if (product.stock < item.cantidad) {
       throw new Error(
-        `Stock insuficiente de ${product.nombre} ${product.presentacion}. ` +
+        `Stock insuficiente de ${product.nombre} ${product.color} ${product.talle}. ` +
         `Disponible: ${product.stock}, solicitado: ${item.cantidad}`
       );
     }
@@ -97,7 +97,8 @@ export async function registerSale(
     processedItems.push({
       producto: product.id,
       cantidad: item.cantidad,
-      presentacion: product.presentacion,
+      color: product.color,
+      talle: product.talle,
     });
 
     // Reducir stock

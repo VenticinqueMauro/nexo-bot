@@ -276,5 +276,47 @@ export const tools = [
         required: ["busqueda"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "learn_preference",
+      description: "Aprender una nueva preferencia o alias personalizado del usuario. Usar cuando el usuario te enseña un término nuevo, alias o patrón específico.",
+      parameters: {
+        type: "object",
+        properties: {
+          tipo: {
+            type: "string",
+            description: "Tipo de preferencia: 'producto_alias', 'cliente_alias', 'abreviacion', 'patron_venta', 'contexto'",
+            enum: ["producto_alias", "cliente_alias", "abreviacion", "patron_venta", "contexto"]
+          },
+          terminoUsuario: {
+            type: "string",
+            description: "El término o frase que usa el usuario"
+          },
+          mapeo: {
+            type: "string",
+            description: "A qué se mapea ese término (el significado real)"
+          },
+          contextoAdicional: {
+            type: "string",
+            description: "Información adicional o contexto sobre esta preferencia"
+          }
+        },
+        required: ["tipo", "terminoUsuario", "mapeo"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "learning_stats",
+      description: "Ver estadísticas del sistema de aprendizaje: cuántas preferencias aprendidas, observaciones pendientes, etc.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: []
+      }
+    }
   }
 ];

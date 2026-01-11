@@ -134,7 +134,7 @@ export async function updateProductStock(
   }
 
   const row = rows[rowIndex];
-  row[3] = newStock.toString(); // Columna Stock
+  row[10] = newStock.toString(); // Columna Stock
 
   await updateRow(env, 'Productos', rowIndex + 1, row);
 }

@@ -26,13 +26,13 @@ El dueño dice "entraron 50 coca" y el bot actualiza el stock. Pregunta "¿quié
 |------------|------------|-------|
 | **Bot Framework** | grammY | Moderno, TypeScript nativo, bien documentado |
 | **Runtime** | Cloudflare Workers | Serverless, económico, edge computing |
-| **LLM** | Workers AI - `@cf/meta/llama-3.1-8b-instruct-fast` | Optimizado para velocidad, 128K contexto, function calling |
+| **LLM** | Workers AI - `@cf/meta/llama-3.1-8b-instruct-fp8` | Optimizado para velocidad, 128K contexto, function calling |
 | **Storage** | Google Sheets API | Rápido de implementar, visible para el dueño |
 | **Lenguaje** | TypeScript | Type safety, mejor DX |
 
 ### ¿Por qué Llama 3.1 8B Fast?
 
-Según la [documentación oficial de Cloudflare](https://developers.cloudflare.com/workers-ai/models/llama-3.1-8b-instruct-fast/):
+Según la [documentación oficial de Cloudflare](https://developers.cloudflare.com/workers-ai/models/@cf/meta/llama-3.1-8b-instruct-fp8/):
 
 - **128,000 tokens de contexto** - Suficiente para conversaciones largas
 - **Versión "fast"** - Optimizada para baja latencia
@@ -231,6 +231,18 @@ Bot: "📊 Ventas de hoy (20/01):
 |----|-------|-------------|-----------------|----------|------|------------|-------|
 | M001 | 2025-01-20 | P003 | Sprite 2.25L | +50 | entrada | - | Llegó pedido proveedor |
 | M002 | 2025-01-20 | P001 | Coca 2.25L | -10 | venta | V001 | - |
+
+### Hoja 6: Observaciones (Sistema de Aprendizaje)
+| ID | Fecha | Tipo | Contexto | Acción Sugerida | Estado | Mensaje Usuario |
+|----|-------|------|----------|-----------------|--------|-----------------|
+| OBS001 | 2025-01-20 | termino_nuevo | Usuario dijo "las de siempre" | Crear alias para productos frecuentes | pendiente | "Entraron las de siempre" |
+| OBS002 | 2025-01-20 | correccion | Usuario corrigió "López" → "Almacén López" | Agregar alias de cliente | implementada | "No, Almacén López" |
+
+### Hoja 7: Preferencias (Sistema de Aprendizaje)
+| ID | Tipo | Término Usuario | Mapeo | Frecuencia | Última Vez | Aprobado | Contexto Adicional |
+|----|------|-----------------|-------|------------|------------|----------|-------------------|
+| PREF001 | producto_alias | "las de siempre" | "remera,negro,XL" | 8 | 2025-01-20 | sí | Pedido frecuente |
+| PREF002 | cliente_alias | "lópez" | "C001" | 15 | 2025-01-20 | sí | Cliente habitual |
 
 ---
 
@@ -507,7 +519,7 @@ Cuando registres stock, confirmá la cantidad antes de guardar.`;
 
 ```typescript
 // En el Worker
-const response = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fast", {
+const response = await env.AI.run("@cf/meta/llama-3.1-8b-instruct-fp8", {
   messages: [
     { role: "system", content: systemPrompt },
     { role: "user", content: "Entraron 50 packs de coca 2.25" }
@@ -781,7 +793,7 @@ wrangler tail
 wrangler secret put NOMBRE_DEL_SECRETO
 
 # Probar Workers AI en el playground
-# https://playground.ai.cloudflare.com/?model=@cf/meta/llama-3.1-8b-instruct-fast
+# https://playground.ai.cloudflare.com/?model=@cf/meta/llama-3.1-8b-instruct-fp8
 ```
 
 ---
@@ -789,7 +801,7 @@ wrangler secret put NOMBRE_DEL_SECRETO
 ## 13. Recursos Útiles
 
 - [Workers AI Docs](https://developers.cloudflare.com/workers-ai/)
-- [Llama 3.1 8B Fast Model](https://developers.cloudflare.com/workers-ai/models/llama-3.1-8b-instruct-fast/)
+- [Llama 3.1 8B Fast Model](https://developers.cloudflare.com/workers-ai/models/@cf/meta/llama-3.1-8b-instruct-fp8/)
 - [Workers AI Pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/)
 - [grammY Docs](https://grammy.dev/)
 - [grammY + Cloudflare Workers](https://grammy.dev/hosting/cloudflare-workers)
@@ -797,12 +809,143 @@ wrangler secret put NOMBRE_DEL_SECRETO
 
 ---
 
-## 14. Próximos Pasos Inmediatos
+## 14. Sistema de Aprendizaje Adaptativo 🧠
+
+### ¿Qué es?
+
+El bot puede **aprender automáticamente** de las interacciones con el usuario y adaptarse a su lenguaje, términos personalizados y patrones de uso.
+
+**Filosofía:** "La herramienta se adapta al usuario, no el usuario a la herramienta."
+
+### Características Principales
+
+#### 1. Detección Automática
+El bot detecta silenciosamente:
+- Términos no reconocidos que se usan repetidamente
+- Correcciones del usuario ("no, me refería a...")
+- Múltiples intentos para lograr algo (indicador de confusión)
+- Patrones de uso frecuentes
+- Errores en tools o búsquedas fallidas
+
+#### 2. Aprendizaje Manual
+El usuario puede enseñar directamente:
+```
+Usuario: "Recordá que 'las de siempre' son remeras negras XL"
+Bot: ✓ Aprendido! Ya sé que cuando decís "las de siempre" te referís a: remeras negras XL
+```
+
+#### 3. Prompt Dinámico
+El system prompt se construye dinámicamente inyectando preferencias aprendidas:
+```
+System Prompt Base
++
+Preferencias Aprendidas (de Google Sheets)
+=
+Prompt Personalizado para este Usuario
+```
+
+### Tipos de Preferencias
+
+1. **producto_alias**: Términos personalizados para productos
+   - "las básicas" → Remera blanca M
+   - "las de siempre" → Conjunto específico
+
+2. **cliente_alias**: Formas informales de referirse a clientes
+   - "el kiosco de juan" → Cliente específico
+   - "el de la esquina" → Cliente conocido
+
+3. **abreviacion**: Shortcuts personalizados
+   - "rne" → Remera negra XL
+   - "jnm" → Jean negro M
+
+4. **patron_venta**: Ventas recurrentes
+   - "lo de siempre para López" → Pedido habitual
+
+5. **contexto**: Información específica del negocio
+   - "temporada alta" → Definición personal
+   - "zona norte" → Áreas de entrega
+
+### Nuevas Tools
+
+```typescript
+{
+  name: "learn_preference",
+  description: "Aprender una nueva preferencia del usuario",
+  parameters: {
+    tipo: "producto_alias | cliente_alias | abreviacion | patron_venta | contexto",
+    terminoUsuario: "string",
+    mapeo: "string",
+    contextoAdicional: "string (opcional)"
+  }
+}
+
+{
+  name: "learning_stats",
+  description: "Ver estadísticas del sistema de aprendizaje"
+}
+```
+
+### Flujo de Aprendizaje
+
+```
+1. Usuario envía mensaje
+   ↓
+2. Sistema carga preferencias aprobadas de Google Sheets
+   ↓
+3. Construye prompt dinámico con preferencias
+   ↓
+4. LLM procesa con contexto personalizado
+   ↓
+5. Ejecuta tool correspondiente
+   ↓
+6. Detecta automáticamente situaciones de aprendizaje
+   ↓
+7. Guarda observaciones en Google Sheets (silencioso)
+   ↓
+8. Responde al usuario
+```
+
+### Ejemplo de Uso
+
+```
+[Primera interacción]
+Usuario: "Entraron las de siempre"
+Bot: "¿A qué productos te referís?"
+Usuario: "Las remeras negras XL, las que siempre pido"
+Bot: [Detecta patrón, guarda observación]
+
+[Segunda interacción]
+Usuario: "Entraron las de siempre"
+Bot: "¿Querés que recuerde que 'las de siempre' son remeras negras XL?"
+Usuario: "Sí"
+Bot: ✓ Listo! [Guarda preferencia aprobada]
+
+[Tercera interacción en adelante]
+Usuario: "Entraron las de siempre"
+Bot: [Prompt dinámico ya incluye esta preferencia]
+Bot: "Perfecto, registrando 50 remeras negras XL. ¿Cuántas entraron?"
+```
+
+### Implementación
+
+**Archivos nuevos:**
+- `src/sheets/learning.ts` - Funciones para Observaciones y Preferencias
+- `src/ai/dynamic-prompt.ts` - Construcción de prompt adaptativo
+
+**Archivos modificados:**
+- `src/ai/agent.ts` - Integración del sistema de aprendizaje
+- `src/ai/tools.ts` - Nuevas tools de aprendizaje
+
+**Documentación completa:** Ver `LEARNING_SYSTEM.md`
+
+---
+
+## 15. Próximos Pasos Inmediatos
 
 1. **Vos:**
    - Crear cuenta en Cloudflare → https://dash.cloudflare.com/sign-up
    - Crear bot en Telegram con @BotFather
-   - Crear el Google Sheet con las 5 hojas
+   - Crear el Google Sheet con las 7 hojas (incluir Observaciones y Preferencias)
 
 2. **Yo:**
    - Te preparo el boilerplate inicial del proyecto
@@ -811,6 +954,7 @@ wrangler secret put NOMBRE_DEL_SECRETO
 
 ---
 
-*Documento de especificaciones Nexo Bot v1.1*
+*Documento de especificaciones Nexo Bot v1.2*
 *Stack: Cloudflare Workers + grammY + Google Sheets + Llama 3.1 8B Fast*
 *Última actualización: Enero 2025*
+*Nuevo: Sistema de Aprendizaje Adaptativo*

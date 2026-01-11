@@ -1,6 +1,13 @@
 import { Env } from '../types';
 import { systemPrompt } from './prompts';
 import { tools } from './tools';
+import { buildDynamicPrompt, extractLearningContext } from './dynamic-prompt';
+import {
+  addObservation,
+  addOrUpdatePreference,
+  getLearningStats,
+  analyzeMessageForLearning,
+} from '../sheets/learning';
 import {
   getAllProducts,
   findProducts,
@@ -215,6 +222,38 @@ ${product.descripcion ? `Descripción: ${product.descripcion}\n` : ''}${product.
         return formatProductInfo(results);
       }
 
+      case 'learn_preference': {
+        const preference = await addOrUpdatePreference(
+          env,
+          args.tipo,
+          args.terminoUsuario,
+          args.mapeo,
+          true, // Auto-aprobar preferencias que el usuario enseña explícitamente
+          args.contextoAdicional
+        );
+
+        return `✓ Aprendido! Ya sé que cuando decís "${preference.terminoUsuario}" te referís a: ${preference.mapeo}. Voy a recordarlo para la próxima.`;
+      }
+
+      case 'learning_stats': {
+        const stats = await getLearningStats(env);
+
+        let message = `🧠 Estadísticas de aprendizaje:\n\n`;
+        message += `📊 Total de preferencias aprendidas: ${stats.totalPreferences}\n`;
+        message += `📝 Observaciones totales: ${stats.totalObservations}\n`;
+        message += `⏳ Observaciones pendientes: ${stats.pendingObservations}\n\n`;
+
+        if (Object.keys(stats.preferencesByType).length > 0) {
+          message += `Preferencias por tipo:\n`;
+          Object.entries(stats.preferencesByType).forEach(([tipo, count]) => {
+            const tipoNombre = tipo.replace('_', ' ');
+            message += `  • ${tipoNombre}: ${count}\n`;
+          });
+        }
+
+        return message;
+      }
+
       default:
         return `Tool "${toolName}" no implementada.`;
     }
@@ -233,15 +272,18 @@ export async function processMessage(
   conversationHistory: Message[] = []
 ): Promise<string> {
   try {
+    // Construir prompt dinámico con preferencias aprendidas
+    const dynamicSystemPrompt = await buildDynamicPrompt(env);
+
     // Construir mensajes para el modelo
     const messages: Message[] = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: dynamicSystemPrompt },
       ...conversationHistory,
       { role: 'user', content: userMessage },
     ];
 
     // Llamar a Workers AI
-    let response: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast', {
+    let response: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
       messages,
       tools,
       max_tokens: 500,
@@ -263,6 +305,26 @@ export async function processMessage(
         return toolResult.replace('NECESITA_CONFIRMACION: ', '');
       }
 
+      // Detectar situaciones de aprendizaje automáticamente
+      const learningAnalysis = analyzeMessageForLearning(
+        userMessage,
+        toolName,
+        toolResult
+      );
+
+      if (learningAnalysis.shouldLearn && learningAnalysis.type && learningAnalysis.suggestion) {
+        // Registrar observación automáticamente
+        const context = extractLearningContext(userMessage, toolName, toolArgs, toolResult);
+        await addObservation(
+          env,
+          learningAnalysis.type,
+          context,
+          learningAnalysis.suggestion,
+          userMessage
+        ).catch(err => console.error('Error guardando observación:', err));
+        // No interrumpir el flujo, solo registrar silenciosamente
+      }
+
       // Agregar el resultado de la tool al historial y pedir respuesta final
       messages.push({
         role: 'assistant',
@@ -278,7 +340,7 @@ export async function processMessage(
       });
 
       // Llamar al modelo nuevamente para que genere la respuesta final
-      const finalResponse: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fast', {
+      const finalResponse: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
         messages,
         max_tokens: 300,
       });
