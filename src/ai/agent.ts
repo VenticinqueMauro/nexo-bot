@@ -284,12 +284,13 @@ export async function processMessage(
   conversationHistory: Message[] = []
 ): Promise<string> {
   try {
-    // Construir prompt dinámico con preferencias aprendidas
-    const dynamicSystemPrompt = await buildDynamicPrompt(env);
+    // OPTIMIZACIÓN: Usar prompt estático para evitar latencia de Sheets
+    // TODO: Cachear preferencias aprendidas en KV para mejor performance
+    // const dynamicSystemPrompt = await buildDynamicPrompt(env);
 
     // Construir mensajes para el modelo
     const messages: Message[] = [
-      { role: 'system', content: dynamicSystemPrompt },
+      { role: 'system', content: systemPrompt }, // Usando prompt estático
       ...conversationHistory,
       { role: 'user', content: userMessage },
     ];
