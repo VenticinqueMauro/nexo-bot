@@ -14,7 +14,7 @@ script_name = "nexo-bot"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["ConversationState"]
+new_sqlite_classes = ["ConversationState"]
 
 # Variables de entorno (los secretos se agregan con wrangler secret put)
 [vars]
