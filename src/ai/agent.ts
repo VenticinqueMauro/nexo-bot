@@ -65,8 +65,19 @@ function requiresToolExecution(message: string): { requires: boolean; suggestedT
     return { requires: true, suggestedTool: 'sale_register' };
   }
 
-  // Patrones que requieren stock_add (SOLO entrada de mercadería, NO ventas)
-  if (/suma|agreg|entr[oóa]|lleg[oóa]|recibi/.test(msg) && /unidad|remera|jean|camisa|producto|stock/.test(msg)) {
+  // Patrones que requieren product_create (PRIORIDAD: crear producto nuevo)
+  // Detectar cuando se menciona precio (indica producto nuevo)
+  if (/(\$|peso|precio).*\d+|(\d+).*(\$|peso|precio)/.test(msg) && /remera|jean|camisa|buzo|producto/.test(msg)) {
+    return { requires: true, suggestedTool: 'product_create' };
+  }
+
+  // Detectar cuando dice explícitamente "nuevo" o "crear"
+  if (/(cre[ao]|nuevo|agreg[aá]).*producto/.test(msg) || /producto.*(nuevo|cre[ao])/.test(msg)) {
+    return { requires: true, suggestedTool: 'product_create' };
+  }
+
+  // Patrones que requieren stock_add (SOLO entrada de mercadería a productos existentes)
+  if (/suma|entr[oóa]|lleg[oóa]|recibi/.test(msg) && /unidad|stock/.test(msg)) {
     return { requires: true, suggestedTool: 'stock_add' };
   }
 
@@ -83,11 +94,6 @@ function requiresToolExecution(message: string): { requires: boolean; suggestedT
   // Patrones que requieren client_add
   if (/agreg.*cliente|nuevo cliente|registr.*cliente/.test(msg)) {
     return { requires: true, suggestedTool: 'client_add' };
-  }
-
-  // Patrones que requieren product_create
-  if (/cre[ao].*producto|nuevo producto|agreg.*producto/.test(msg)) {
-    return { requires: true, suggestedTool: 'product_create' };
   }
 
   // Patrones que requieren whatsapp_reminder
@@ -144,14 +150,22 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
       }
 
       case 'stock_add': {
-        const result = await addStock(
-          env,
-          args.producto,
-          args.cantidad,
-          args.color,
-          args.talle
-        );
-        return `✓ Registrado. Stock de ${result.product.nombre} ${result.product.color} ${result.product.talle} actualizado: ${result.newStock} (+${args.cantidad})`;
+        try {
+          const result = await addStock(
+            env,
+            args.producto,
+            args.cantidad,
+            args.color,
+            args.talle
+          );
+          return `✓ Registrado. Stock de ${result.product.nombre} ${result.product.color} ${result.product.talle} actualizado: ${result.newStock} (+${args.cantidad})`;
+        } catch (error: any) {
+          // Si el error es que no se encontró el producto, sugerir crearlo
+          if (error.message && error.message.includes('No se encontró el producto')) {
+            return `❌ ${error.message}\n\n💡 **Sugerencia:** Parece que este producto no existe todavía. ¿Querés que lo cree primero?\n\nPara crear el producto, necesito:\n- Nombre: ${args.producto}\n- Categoría: (¿Es una Remera, Jean, Camisa, Buzo, etc.?)\n- Color: ${args.color || '(especificar)'}\n- Talle: ${args.talle || '(especificar)'}\n- Precio: (especificar)\n\nDecime "Sí, crealo con categoría X y precio $Y" o dame los datos completos.`;
+          }
+          throw error;
+        }
       }
 
       case 'client_list': {
