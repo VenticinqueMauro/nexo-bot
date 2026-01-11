@@ -236,14 +236,22 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
         }
 
         // Parsear pagado a boolean
+        // IMPORTANTE: Si el AI envía False por defecto sin que el usuario lo especifique,
+        // debemos preguntar. Solo aceptamos true/si como confirmación de pago.
         let pagado = args.pagado;
-        if (typeof pagado === 'string') {
-          pagado = pagado.toLowerCase() === 'true' || pagado.toLowerCase() === 'si';
+        if (pagado === undefined || pagado === null) {
+          return '¿El cliente pagó o va a cuenta corriente? Respondé "pagó" o "cuenta corriente".';
         }
 
-        // Nota: pagado debe ser especificado por el usuario
-        if (pagado === undefined) {
-          return 'NECESITA_CONFIRMACION: ¿El cliente pagó o va a cuenta corriente?';
+        if (typeof pagado === 'string') {
+          const pagadoLower = pagado.toLowerCase();
+          if (pagadoLower === 'false' || pagadoLower === 'no') {
+            pagado = false;
+          } else if (pagadoLower === 'true' || pagadoLower === 'si' || pagadoLower === 'sí') {
+            pagado = true;
+          } else {
+            return '¿El cliente pagó o va a cuenta corriente? Respondé "pagó" o "cuenta corriente".';
+          }
         }
 
         const order = await registerSale(
@@ -255,7 +263,12 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
 
         const allProducts = await getAllProducts(env);
         let message = formatOrder(order, allProducts);
-        message += `\n\n✓ ${args.pagado ? 'Venta registrada (pagada)' : 'Agregado a cuenta corriente'}\nStock actualizado.`;
+
+        if (pagado) {
+          message += `\n\n✓ Venta registrada y PAGADA ($${order.total.toLocaleString('es-AR')})\nStock actualizado.`;
+        } else {
+          message += `\n\n✓ Venta registrada en CUENTA CORRIENTE\nDeuda: $${order.total.toLocaleString('es-AR')}\nStock actualizado.`;
+        }
 
         return message;
       }
