@@ -264,6 +264,18 @@ ${product.descripcion ? `Descripción: ${product.descripcion}\n` : ''}${product.
 }
 
 /**
+ * Ejecuta una promesa con timeout
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    )
+  ]);
+}
+
+/**
  * Procesa un mensaje del usuario con Workers AI
  */
 export async function processMessage(
@@ -282,12 +294,16 @@ export async function processMessage(
       { role: 'user', content: userMessage },
     ];
 
-    // Llamar a Workers AI
-    let response: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
-      messages,
-      tools,
-      max_tokens: 500,
-    });
+    // Llamar a Workers AI con timeout de 8 segundos
+    let response: any = await withTimeout(
+      env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+        messages,
+        tools,
+        max_tokens: 200, // Reducido para respuestas más rápidas
+      }),
+      8000,
+      'AI request timeout - el modelo tardó demasiado en responder'
+    );
 
     console.log('Response from AI:', JSON.stringify(response).substring(0, 500));
 
@@ -384,10 +400,14 @@ export async function processMessage(
       });
 
       // Llamar al modelo nuevamente para que genere la respuesta final
-      const finalResponse: any = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
-        messages,
-        max_tokens: 300,
-      });
+      const finalResponse: any = await withTimeout(
+        env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+          messages,
+          max_tokens: 150, // Reducido para respuestas más rápidas
+        }),
+        8000,
+        'AI final response timeout'
+      );
 
       return finalResponse.response || finalResponse.content || toolResult;
     }
