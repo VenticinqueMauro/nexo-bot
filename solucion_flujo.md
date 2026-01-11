@@ -38,3 +38,10 @@ Con estos cambios, el flujo documentado funcionaría así:
 2. **Búsqueda:** Si buscás "Remeras", encontrará "Remera".
 3. **Desempate:** Si hay ambigüedad, el bot te pedirá el SKU. Como ahora los SKUs son únicos, al ingresar el SKU correcto, el bot seleccionará el producto sin dudar ni volver a preguntar.
 4. **Resumen de Venta:** Verás "Remera manga corta celeste" en lugar de `PMK9O51...`.
+
+### 4. Confirmación de Pago (Botones)
+**Problema:** Al registrar una venta, el bot asumía "Cuenta Corriente" si no se especificaba el pago, sin dar opción a confirmar. Además, faltaban los botones interactivos.
+
+**Solución Implementada (`src/ai/agent.ts` + `handlers.ts`):**
+- Se modificó la tool `sale_register` para que devuelva un código especial (`NECESITA_CONFIRMACION:PAGO`) cuando no se aclara el estado del pago.
+- El bot detecta este código y muestra automáticamente los botones "💰 Pagado" y "📋 A Cuenta", permitiendo al usuario elegir con un clic en lugar de escribir.

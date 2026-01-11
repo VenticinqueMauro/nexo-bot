@@ -281,7 +281,7 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
 
         // Si no viene o es null/undefined, PREGUNTAR
         if (pagado === undefined || pagado === null) {
-          return '¿El cliente pagó o va a cuenta corriente? Respondé "pagó" o "cuenta corriente".';
+          return 'NECESITA_CONFIRMACION:PAGO';
         }
 
         if (typeof pagado === 'string') {
