@@ -29,7 +29,7 @@ export const tools = [
         properties: {
           producto: {
             type: "string",
-            description: "Nombre del producto (ej: 'remera', 'jean', 'camisa')"
+            description: "Nombre del producto tal cual lo dijo el usuario. NO inventar SKUs. Ej: 'remera', 'jean', 'camisa'"
           },
           cantidad: {
             type: "number",
@@ -70,7 +70,7 @@ export const tools = [
         properties: {
           nombre: {
             type: "string",
-            description: "Nombre o parte del nombre del cliente"
+            description: "Nombre del cliente tal cual lo dijo el usuario."
           }
         },
         required: ["nombre"]
@@ -87,7 +87,7 @@ export const tools = [
         properties: {
           nombre: {
             type: "string",
-            description: "Nombre del cliente/negocio"
+            description: "Nombre del cliente/negocio tal cual lo dijo el usuario."
           },
           telefono: {
             type: "string",
@@ -165,20 +165,23 @@ export const tools = [
     type: "function",
     function: {
       name: "sale_register",
-      description: "Registrar una VENTA. Usar cuando el usuario dice 'vendí', 'compró', 'llevó'. RESTA unidades del stock, registra la venta en Pedidos, y gestiona el pago. IMPORTANTE: Preguntar siempre el nombre del cliente y si pagó o va a cuenta corriente.",
+      description: "Registrar una VENTA. Usar cuando el usuario dice 'vendí', 'compró', 'llevó'. RESTA unidades del stock, registra la venta en Pedidos. MUY IMPORTANTE: El parámetro 'pagado' solo debe ser true si el usuario dice explícitamente que 'pagó', 'pago en efectivo', 'pago con tarjeta'. Si NO lo dice, NO incluyas el parámetro pagado para que el sistema pregunte.",
       parameters: {
         type: "object",
         properties: {
           cliente: {
             type: "string",
-            description: "Nombre del cliente"
+            description: "Nombre del cliente tal cual lo dijo el usuario. NO normalizar ni cambiar mayúsculas/minúsculas."
           },
           items: {
             type: "array",
             items: {
               type: "object",
               properties: {
-                producto: { type: "string" },
+                producto: {
+                  type: "string",
+                  description: "Nombre del producto tal cual lo dijo el usuario. NO inventar SKUs ni IDs. Ej: 'remera', 'corpiño', 'jean'."
+                },
                 cantidad: { type: "number" },
                 color: { type: "string" },
                 talle: { type: "string" }
@@ -188,7 +191,7 @@ export const tools = [
           },
           pagado: {
             type: "boolean",
-            description: "Si pagó o va a cuenta corriente"
+            description: "SOLO incluir si el usuario lo dijo explícitamente. true='pagó', 'efectivo', 'tarjeta'. NO incluir si no lo dijo."
           }
         },
         required: ["cliente", "items"]

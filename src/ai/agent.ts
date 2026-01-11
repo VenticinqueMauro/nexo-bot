@@ -236,20 +236,26 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
         }
 
         // Parsear pagado a boolean
-        // IMPORTANTE: Si el AI envía False por defecto sin que el usuario lo especifique,
-        // debemos preguntar. Solo aceptamos true/si como confirmación de pago.
+        // SIEMPRE PREGUNTAR si el usuario no especificó que PAGÓ
+        // Solo proceder automáticamente si pagado === true o "true" o "si"
         let pagado = args.pagado;
+
+        // Si no viene o es null/undefined, PREGUNTAR
         if (pagado === undefined || pagado === null) {
           return '¿El cliente pagó o va a cuenta corriente? Respondé "pagó" o "cuenta corriente".';
         }
 
         if (typeof pagado === 'string') {
           const pagadoLower = pagado.toLowerCase();
-          if (pagadoLower === 'false' || pagadoLower === 'no') {
-            pagado = false;
-          } else if (pagadoLower === 'true' || pagadoLower === 'si' || pagadoLower === 'sí') {
+          // Casos positivos
+          if (['true', 'si', 'sí', 'pago', 'pagó', 'efectivo', 'tarjeta', 'transferencia'].some(s => pagadoLower.includes(s))) {
             pagado = true;
+          }
+          // Casos negativos explícitos
+          else if (['false', 'no', 'cuenta corriente', 'cc', 'ctacte', 'debe', 'fiado'].some(s => pagadoLower.includes(s))) {
+            pagado = false;
           } else {
+            // No se entendió -> preguntar
             return '¿El cliente pagó o va a cuenta corriente? Respondé "pagó" o "cuenta corriente".';
           }
         }
