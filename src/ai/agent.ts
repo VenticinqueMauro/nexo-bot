@@ -127,6 +127,11 @@ function isHallucinatedResponse(response: string): boolean {
     /\*\*sumando/i,
     /\*\*vendiendo/i,
     /\*\*registrando/i,
+    /venta registrada/i,
+    /pago registrado/i,
+    /deuda actualizada/i,
+    /stock actualizado/i,
+    /producto creado/i,
   ];
 
   return patterns.some(p => p.test(response));

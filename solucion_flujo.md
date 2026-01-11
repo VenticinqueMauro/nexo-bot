@@ -45,3 +45,11 @@ Con estos cambios, el flujo documentado funcionaría así:
 **Solución Implementada (`src/ai/agent.ts` + `handlers.ts`):**
 - Se modificó la tool `sale_register` para que devuelva un código especial (`NECESITA_CONFIRMACION:PAGO`) cuando no se aclara el estado del pago.
 - El bot detecta este código y muestra automáticamente los botones "💰 Pagado" y "📋 A Cuenta", permitiendo al usuario elegir con un clic en lugar de escribir.
+
+### 5. Prevención de Alucinaciones
+**Problema:** A veces el bot respondía "Venta registrada" falsamente simular la acción sin realmente guardar los datos en la hoja de cálculo (ni llamar a la tool).
+
+**Solución Implementada (`src/ai/agent.ts` + `prompts.ts`):**
+- Se agregaron patrones de detección para frases como "Venta registrada", "Pago registrado", etc.
+- Si el bot usa estas frases sin haber llamado a una tool, el sistema lo intercepta, lo considera una alucinación y fuerza un reintento con instrucciones estrictas para que SÍ ejecute la acción.
+- Se reforzó el "System Prompt" para prohibir explícitamente estas simulaciones.
