@@ -5,13 +5,14 @@ import { getAllProducts, getLowStockProducts, searchProducts, updateProductPhoto
 import { getAllDebts } from '../sheets/payments';
 import { getTodayOrders } from '../sheets/sales';
 import { formatStockSummary, formatDebtList, formatDailySales, formatProductInfo } from '../utils/formatters';
-
-// Almacenamiento temporal del historial de conversación
-// En producción, esto debería estar en KV o Durable Objects
-const conversationHistory = new Map<number, any[]>();
-
-// Almacenamiento temporal para fotos pendientes de asociar
-const pendingPhotos = new Map<number, string>();
+import {
+  getConversationHistory,
+  addMessageToHistory,
+  clearConversationHistory,
+  getPendingPhoto,
+  setPendingPhoto,
+  clearPendingPhoto
+} from '../utils/conversation-state';
 
 /**
  * Handler para el comando /start
@@ -147,11 +148,11 @@ export async function handleHoy(ctx: Context, env: Env) {
 /**
  * Handler para el comando /cancelar
  */
-export async function handleCancelar(ctx: Context) {
+export async function handleCancelar(ctx: Context, env: Env) {
   const userId = ctx.from?.id;
   if (userId) {
-    conversationHistory.delete(userId);
-    pendingPhotos.delete(userId);
+    await clearConversationHistory(env, userId);
+    await clearPendingPhoto(env, userId);
   }
 
   await ctx.reply('✓ Acción cancelada. Historial borrado.');
@@ -170,7 +171,7 @@ export async function handleMessage(ctx: Context, env: Env) {
 
   try {
     // Verificar si el usuario está en el flujo de asociar foto
-    const pendingPhotoFileId = pendingPhotos.get(userId);
+    const pendingPhotoFileId = await getPendingPhoto(env, userId);
     if (pendingPhotoFileId) {
       await ctx.replyWithChatAction('typing');
 
@@ -191,7 +192,7 @@ export async function handleMessage(ctx: Context, env: Env) {
       const product = products[0];
       await updateProductPhoto(env, product.id, pendingPhotoFileId);
 
-      pendingPhotos.delete(userId);
+      await clearPendingPhoto(env, userId);
 
       await ctx.reply(`✓ Foto asociada exitosamente a:\n${product.nombre} ${product.color} ${product.talle}\nSKU: ${product.sku}`);
       return;
@@ -200,24 +201,15 @@ export async function handleMessage(ctx: Context, env: Env) {
     // Mostrar indicador de "escribiendo..."
     await ctx.replyWithChatAction('typing');
 
-    // Obtener historial de conversación
-    const history = conversationHistory.get(userId) || [];
+    // Obtener historial de conversación del Durable Object
+    const history = await getConversationHistory(env, userId);
 
     // Procesar mensaje con AI
     const response = await processMessage(env, message, history);
 
-    // Actualizar historial
-    history.push(
-      { role: 'user', content: message },
-      { role: 'assistant', content: response }
-    );
-
-    // Limitar historial a últimos 10 mensajes
-    if (history.length > 10) {
-      history.splice(0, history.length - 10);
-    }
-
-    conversationHistory.set(userId, history);
+    // Guardar mensajes en el historial (Durable Object maneja el límite automáticamente)
+    await addMessageToHistory(env, userId, 'user', message);
+    await addMessageToHistory(env, userId, 'assistant', response);
 
     // Enviar respuesta
     await ctx.reply(response);
@@ -264,8 +256,8 @@ export async function handlePhoto(ctx: Context, env: Env) {
   const photo = photos[photos.length - 1]; // Foto de mayor resolución
   const fileId = photo.file_id;
 
-  // Guardar el file_id temporalmente
-  pendingPhotos.set(userId, fileId);
+  // Guardar el file_id en Durable Object
+  await setPendingPhoto(env, userId, fileId);
 
   const caption = ctx.message?.caption;
 
@@ -274,41 +266,22 @@ export async function handlePhoto(ctx: Context, env: Env) {
     await ctx.replyWithChatAction('typing');
 
     // Inyectamos el ID de la foto en el mensaje para que el AI lo vea si decide usar una tool
-    // El orden importa: ponemos la foto al final o en un formato que el prompt pueda entender si lo entrenamos, 
-    // o simplemente confiamos en que al usar la tool 'product_create' el AI verá el parámetro 'fotoId'.
-    // Para facilitar, le agregamos una "pista" al mensaje.
     const messageWithPhoto = `${caption}\n\n[PHOTO_UPLOAD: ${fileId}]`;
 
-    // Obtener historial de conversación
-    const history = conversationHistory.get(userId) || [];
+    // Obtener historial de conversación del Durable Object
+    const history = await getConversationHistory(env, userId);
 
     try {
       const response = await processMessage(env, messageWithPhoto, history);
 
-      // Actualizar historial
-      history.push(
-        { role: 'user', content: caption }, // Guardamos el caption original en el historial visible
-        { role: 'assistant', content: response }
-      );
-
-      // Limpiar pendingPhotos si se usó (aunque el AI debería haberlo usado)
-      // Lo dejamos por si acaso el AI falla y el usuario quiere reintentar
-      // O podríamos limpiarlo si la respuesta indica éxito.
-      // Por simplicidad, si el AI responde, asumimos que procesó la intención.
-      // Pero si el AI pregunta "¿Qué es esto?", la foto sigue pendiente.
-
-      // Limitar historial
-      if (history.length > 10) {
-        history.splice(0, history.length - 10);
-      }
-      conversationHistory.set(userId, history);
+      // Guardar mensajes en el historial
+      await addMessageToHistory(env, userId, 'user', caption); // Guardamos el caption original
+      await addMessageToHistory(env, userId, 'assistant', response);
 
       await ctx.reply(response);
 
       // Si el AI creó un producto (detectado por texto o algo), podríamos borrar la foto pendiente
-      // Pero pendingPhotos.delete(userId) ya se hace en handleMessage si se asocia manualmente.
-      // Aquí, si el AI usó el tool 'product_create' con fotoId, la foto ya está asociada.
-      // Si el AI no usó la foto, queda pendiente para la próxima interacción.
+      // Por ahora, la foto queda pendiente hasta que se asocie explícitamente
       return;
 
     } catch (error: any) {

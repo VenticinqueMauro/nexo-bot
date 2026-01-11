@@ -17,6 +17,7 @@ import {
   handleVoice,
   handlePhoto,
 } from './handlers';
+import { handleCallbackQuery } from './callback-handlers';
 
 /**
  * Crea y configura el bot de Telegram
@@ -36,7 +37,10 @@ export function createBot(env: Env): Bot {
   bot.command('stock', (ctx) => handleStock(ctx, env));
   bot.command('deudas', (ctx) => handleDeudas(ctx, env));
   bot.command('hoy', (ctx) => handleHoy(ctx, env));
-  bot.command('cancelar', handleCancelar);
+  bot.command('cancelar', (ctx) => handleCancelar(ctx, env));
+
+  // Callback queries (respuestas de botones inline)
+  bot.on('callback_query:data', (ctx) => handleCallbackQuery(ctx, env));
 
   // Mensajes de voz
   bot.on('message:voice', (ctx) => handleVoice(ctx, env));

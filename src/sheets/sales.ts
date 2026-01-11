@@ -1,4 +1,4 @@
-import { Env, Order, OrderItem } from '../types';
+import { Env, Order, OrderItem, Product } from '../types';
 import {
   getSheetValues,
   appendRow,
@@ -9,6 +9,11 @@ import {
 } from './client';
 import { findProduct, reduceStock } from './stock';
 import { findClient } from './clients';
+import {
+  validateSale,
+  validateDeadline,
+  formatValidationResult,
+} from '../utils/validators';
 
 interface OrderRow {
   ID: string;
@@ -88,9 +93,22 @@ export async function registerSale(
     throw new Error(`No se encontró el cliente "${clienteNombre}". Registralo primero.`);
   }
 
+  // Validar vencimiento si está presente
+  if (vencimiento) {
+    const deadlineValidation = validateDeadline(vencimiento);
+    if (!deadlineValidation.valid) {
+      throw new Error(`Fecha de vencimiento inválida:\n${formatValidationResult(deadlineValidation)}`);
+    }
+    // Log warnings pero no bloquear
+    if (deadlineValidation.warnings.length > 0) {
+      console.warn('Advertencias de vencimiento:', deadlineValidation.warnings);
+    }
+  }
+
   // Procesar items y calcular total
   let total = 0;
   const processedItems: OrderItem[] = [];
+  const itemsForValidation: Array<{ product: Product; quantity: number }> = [];
 
   for (const item of items) {
     const product = await findProduct(env, item.producto, item.color, item.talle);
@@ -99,16 +117,13 @@ export async function registerSale(
       throw new Error(`No se encontró el producto "${item.producto}" ${item.color || ''} ${item.talle || ''}`);
     }
 
-    // Verificar stock disponible
-    if (product.stock < item.cantidad) {
-      throw new Error(
-        `Stock insuficiente de ${product.nombre} ${product.color} ${product.talle}. ` +
-        `Disponible: ${product.stock}, solicitado: ${item.cantidad}`
-      );
-    }
-
     const itemTotal = product.precio * item.cantidad;
     total += itemTotal;
+
+    itemsForValidation.push({
+      product,
+      quantity: item.cantidad
+    });
 
     processedItems.push({
       producto: product.id,
@@ -116,8 +131,29 @@ export async function registerSale(
       color: product.color,
       talle: product.talle,
     });
+  }
 
-    // Reducir stock
+  // Validar la venta completa
+  const saleValidation = validateSale({
+    items: itemsForValidation,
+    total,
+    clientName: clienteNombre
+  });
+
+  if (!saleValidation.valid) {
+    throw new Error(`Validación de venta falló:\n${formatValidationResult(saleValidation)}`);
+  }
+
+  // Log advertencias pero continuar
+  if (saleValidation.warnings.length > 0) {
+    console.warn('Advertencias de venta:', saleValidation.warnings);
+  }
+
+  // Reducir stock de cada item
+  for (let i = 0; i < processedItems.length; i++) {
+    const item = processedItems[i];
+    const product = itemsForValidation[i].product;
+
     await reduceStock(env, product.id, item.cantidad);
   }
 

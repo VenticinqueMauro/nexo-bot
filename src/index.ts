@@ -3,6 +3,9 @@ import { getAllOrders } from './sheets/sales';
 import { findClient } from './sheets/clients';
 import { createWebhook } from './telegram/bot';
 
+// Exportar Durable Objects
+export { ConversationState } from './durable-objects/ConversationState';
+
 /**
  * Entry point del Cloudflare Worker
  */

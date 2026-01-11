@@ -8,6 +8,11 @@ import {
 } from './client';
 import { findClient, getAllClients } from './clients';
 import { getClientOrders } from './sales';
+import {
+  validatePayment,
+  validateMoneyAmount,
+  formatValidationResult,
+} from '../utils/validators';
 
 interface PaymentRow {
   ID: string;
@@ -107,13 +112,26 @@ export async function registerPayment(
     throw new Error(`No se encontró el cliente "${clienteNombre}"`);
   }
 
-  // Verificar que la deuda sea suficiente
+  // Validar monto básico
+  const amountValidation = validateMoneyAmount(monto, 'payment');
+  if (!amountValidation.valid) {
+    throw new Error(`Monto de pago inválido:\n${formatValidationResult(amountValidation)}`);
+  }
+
+  // Obtener deuda actual
   const currentDebt = await getClientDebt(env, client.id);
-  if (monto > currentDebt) {
-    throw new Error(
-      `El monto del pago ($${monto}) es mayor a la deuda actual ($${currentDebt}). ` +
-      `Verificá el monto.`
-    );
+
+  // Validar pago contra deuda
+  const paymentValidation = validatePayment(monto, currentDebt);
+
+  if (!paymentValidation.valid) {
+    throw new Error(`Validación de pago falló:\n${formatValidationResult(paymentValidation)}`);
+  }
+
+  // Log advertencias (ej: pago mayor a deuda)
+  if (paymentValidation.warnings.length > 0) {
+    console.warn('Advertencias de pago:', paymentValidation.warnings);
+    // Se podría retornar estas advertencias al usuario para confirmación
   }
 
   const id = generateId('PAY');

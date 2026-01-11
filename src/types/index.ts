@@ -3,6 +3,9 @@ export interface Env {
   // Workers AI binding
   AI: Ai;
 
+  // Durable Objects bindings
+  CONVERSATION_STATE: DurableObjectNamespace;
+
   // Variables de entorno
   TELEGRAM_BOT_TOKEN: string;
   OWNER_TELEGRAM_ID: string;

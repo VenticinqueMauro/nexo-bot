@@ -10,6 +10,11 @@ import {
   normalizeProductName,
   normalizePresentacion,
 } from './client';
+import {
+  validateStockQuantity,
+  validateProductPrice,
+  formatValidationResult,
+} from '../utils/validators';
 
 interface ProductRow {
   ID: string;
@@ -226,6 +231,18 @@ export async function addStock(
 
   // Asegurar que cantidad sea número (puede venir como string del AI)
   const cantidadNum = typeof cantidad === 'string' ? parseInt(cantidad, 10) : cantidad;
+
+  // Validar cantidad
+  const qtyValidation = validateStockQuantity(cantidadNum, 'add');
+  if (!qtyValidation.valid) {
+    throw new Error(`Cantidad inválida:\n${formatValidationResult(qtyValidation)}`);
+  }
+
+  // Log advertencias
+  if (qtyValidation.warnings.length > 0) {
+    console.warn('Advertencias de stock:', qtyValidation.warnings);
+  }
+
   const newStock = product.stock + cantidadNum;
 
   // Actualizar stock
@@ -334,6 +351,28 @@ export async function createProduct(
   stockInicial: number = 0,
   stockMinimo: number = 5
 ): Promise<Product> {
+  // Validar precio
+  const priceValidation = validateProductPrice(precio);
+  if (!priceValidation.valid) {
+    throw new Error(`Precio inválido:\n${formatValidationResult(priceValidation)}`);
+  }
+
+  // Log advertencias de precio
+  if (priceValidation.warnings.length > 0) {
+    console.warn('Advertencias de precio:', priceValidation.warnings);
+  }
+
+  // Validar stock inicial
+  const stockValidation = validateStockQuantity(stockInicial, 'add');
+  if (!stockValidation.valid) {
+    throw new Error(`Stock inicial inválido:\n${formatValidationResult(stockValidation)}`);
+  }
+
+  // Log advertencias de stock
+  if (stockValidation.warnings.length > 0) {
+    console.warn('Advertencias de stock inicial:', stockValidation.warnings);
+  }
+
   // Verificar si ya existe un producto igual
   const existing = await findExactProduct(env, nombre, categoria, color, talle);
   if (existing) {
