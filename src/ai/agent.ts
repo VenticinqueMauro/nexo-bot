@@ -300,20 +300,10 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           }
         }
 
-        console.log('[DEBUG] Payment Check:', {
-          original: args.pagado,
-          parsed: pagado,
-          userMessage,
-          isBoolean: typeof pagado === 'boolean'
-        });
-
-        // 2. Validación Anti-Alucinación (User Message Check)
         if (userMessage && typeof pagado === 'boolean') {
           const userMsgLower = userMessage.toLowerCase();
           const explicitCC = ['cuenta corriente', 'cc', 'ctacte', 'c.c.', 'fiado', 'debe', 'no pago', 'sin pagar', 'a cuenta'].some(term => userMsgLower.includes(term));
           const explicitPaid = ['pago', 'pagó', 'pagada', 'pagado', 'efectivo', 'tarjeta', 'transferencia', 'mp', 'mercado pago', 'alias', 'cvu'].some(term => userMsgLower.includes(term));
-
-          console.log('[DEBUG] Keywords:', { explicitCC, explicitPaid, msg: userMsgLower });
 
           if (pagado === false && !explicitCC) {
             console.log('Force confirmation: Model predicted pagado=false but user did not be explicit.');
@@ -333,11 +323,24 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
 
         // Parsear fecha de vencimiento si viene
         let vencimiento: string | undefined = undefined;
+        let explicitNoDeadline = false;
+
         if (args.vencimiento) {
-          const parsed = parseNaturalDate(args.vencimiento);
-          if (parsed) {
-            vencimiento = parsed;
+          const vLower = args.vencimiento.toLowerCase();
+          if (vLower.includes('sin') || vLower.includes('no') || vLower.includes('none')) {
+            explicitNoDeadline = true;
+          } else {
+            const parsed = parseNaturalDate(args.vencimiento);
+            if (parsed) {
+              vencimiento = parsed;
+            }
           }
+        }
+
+        // Si es a cuenta corriente y NO tiene vencimiento establecido (y no se especificó explicitamente que no tenga),
+        // PREGUNTAR para dar opción de botones rápidos
+        if (pagado === false && !vencimiento && !explicitNoDeadline) {
+          return '¿Cuándo vence esta deuda?';
         }
 
         const order = await registerSale(
