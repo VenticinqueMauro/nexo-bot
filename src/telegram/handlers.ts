@@ -22,6 +22,7 @@ import {
   productSelectionKeyboard,
   clientSelectionKeyboard,
   paymentStatusKeyboard,
+  deadlineQuickSelectKeyboard,
 } from './inline-keyboards';
 
 /**
@@ -280,6 +281,9 @@ export async function handleMessage(ctx: Context, env: Env) {
     } else if (response.includes('NECESITA_CONFIRMACION:PAGO')) {
       const keyboard = paymentStatusKeyboard();
       await ctx.reply('¿El cliente pagó o va a cuenta corriente?', { reply_markup: keyboard });
+    } else if (response.includes('¿Cuándo vence esta deuda?')) {
+      const keyboard = deadlineQuickSelectKeyboard();
+      await ctx.reply(response, { reply_markup: keyboard });
     } else {
       // Respuesta normal, sin múltiples opciones
       await addMessageToHistory(env, userId, 'user', message);

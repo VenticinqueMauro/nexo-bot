@@ -140,7 +140,7 @@ function isHallucinatedResponse(response: string): boolean {
 /**
  * Ejecuta una tool y retorna el resultado
  */
-async function executeTool(env: Env, toolName: string, args: any): Promise<string> {
+async function executeTool(env: Env, toolName: string, args: any, userMessage?: string): Promise<string> {
   try {
     switch (toolName) {
       case 'stock_check': {
@@ -283,6 +283,18 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
         // SIEMPRE PREGUNTAR si el usuario no especificó que PAGÓ
         // Solo proceder automáticamente si pagado === true o "true" o "si"
         let pagado = args.pagado;
+
+        // Anti-Alucinación de 'false': Si el usuario no dijo explícitamente "cuenta corriente" o similar,
+        // pero el modelo mandó 'false', lo forzamos a undefined para preguntar.
+        if (pagado === false && userMessage) {
+          const userMsgLower = userMessage.toLowerCase();
+          const explicitCC = ['cuenta corriente', 'cc', 'ctacte', 'c.c.', 'fiado', 'debe', 'no pago', 'sin pagar', 'a cuenta'].some(term => userMsgLower.includes(term));
+
+          if (!explicitCC) {
+            console.log('Force confirmation: Model predicted pagado=false but user did not be explicit.');
+            pagado = undefined;
+          }
+        }
 
         // Si no viene o es null/undefined, PREGUNTAR
         if (pagado === undefined || pagado === null) {
@@ -670,7 +682,7 @@ export async function processMessage(
               console.log('Detected tool call in text response:', toolCallData);
 
               // Ejecutar la tool manualmente
-              const toolResult = await executeTool(env, toolCallData.name, toolCallData.parameters);
+              const toolResult = await executeTool(env, toolCallData.name, toolCallData.parameters, userMessage);
 
               // Retornar el resultado directamente (ya formateado)
               return toolResult;
@@ -691,7 +703,7 @@ export async function processMessage(
       console.log(`Ejecutando tool: ${toolName}`, toolArgs);
 
       // Ejecutar la tool
-      const toolResult = await executeTool(env, toolName, toolArgs);
+      const toolResult = await executeTool(env, toolName, toolArgs, userMessage);
 
       console.log('Tool result:', toolResult.substring(0, 200));
 
@@ -743,7 +755,7 @@ export async function processMessage(
           if (retryResponse.tool_calls && retryResponse.tool_calls.length > 0) {
             const toolCall = retryResponse.tool_calls[0];
             console.log(`✓ Retry exitoso - ejecutando tool: ${toolCall.name}`);
-            const toolResult = await executeTool(env, toolCall.name, toolCall.arguments);
+            const toolResult = await executeTool(env, toolCall.name, toolCall.arguments, userMessage);
             return toolResult;
           }
         } catch (retryError) {

@@ -52,4 +52,12 @@ Con estos cambios, el flujo documentado funcionaría así:
 **Solución Implementada (`src/ai/agent.ts` + `prompts.ts`):**
 - Se agregaron patrones de detección para frases como "Venta registrada", "Pago registrado", etc.
 - Si el bot usa estas frases sin haber llamado a una tool, el sistema lo intercepta, lo considera una alucinación y fuerza un reintento con instrucciones estrictas para que SÍ ejecute la acción.
+- Si el bot usa estas frases sin haber llamado a una tool, el sistema lo intercepta, lo considera una alucinación y fuerza un reintento con instrucciones estrictas para que SÍ ejecute la acción.
 - Se reforzó el "System Prompt" para prohibir explícitamente estas simulaciones.
+
+### 6. Validación Estricta de Pago y Fechas
+**Problema:** Si el usuario no decía nada sobre el pago, a veces el bot asumía "no pagado" sin preguntar. Y al preguntar fecha de vencimiento, no daba opciones rápidas.
+
+**Solución Implementada (`src/ai/agent.ts` + `handlers.ts`):**
+- Si el modelo predice "no pagado" (`false`) pero el usuario no dijo explícitamente "cuenta corriente" o palabras clave, el sistema fuerza la pregunta de confirmación.
+- Se agregaron botones rápidos para fechas de vencimiento (7 días, 15 días, etc.) cuando se confirma una deuda.
