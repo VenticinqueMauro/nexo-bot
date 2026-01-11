@@ -1,0 +1,268 @@
+/**
+ * Definición de tools para Workers AI (Llama 3.1 function calling)
+ */
+export const tools = [
+  {
+    type: "function",
+    function: {
+      name: "stock_check",
+      description: "Consultar el stock actual de uno o varios productos. Usar cuando el usuario pregunta cuánto hay de algo.",
+      parameters: {
+        type: "object",
+        properties: {
+          producto: {
+            type: "string",
+            description: "Nombre del producto a consultar (ej: 'coca', 'sprite', 'fanta'). Dejar vacío para ver todo el stock."
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "stock_add",
+      description: "Registrar entrada de mercadería al stock. Usar cuando el usuario dice que llegó/entró mercadería.",
+      parameters: {
+        type: "object",
+        properties: {
+          producto: {
+            type: "string",
+            description: "Nombre del producto (ej: 'remera', 'jean', 'camisa')"
+          },
+          cantidad: {
+            type: "number",
+            description: "Cantidad que entró (en unidades)"
+          },
+          color: {
+            type: "string",
+            description: "Color del producto (ej: 'negro', 'blanco', 'azul')"
+          },
+          talle: {
+            type: "string",
+            description: "Talle del producto (ej: 'S', 'M', 'L', 'XL')"
+          }
+        },
+        required: ["producto", "cantidad"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "client_search",
+      description: "Buscar información de un cliente por nombre",
+      parameters: {
+        type: "object",
+        properties: {
+          nombre: {
+            type: "string",
+            description: "Nombre o parte del nombre del cliente"
+          }
+        },
+        required: ["nombre"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "client_add",
+      description: "Registrar un cliente nuevo",
+      parameters: {
+        type: "object",
+        properties: {
+          nombre: {
+            type: "string",
+            description: "Nombre del cliente/negocio"
+          },
+          telefono: {
+            type: "string",
+            description: "Teléfono de contacto"
+          },
+          direccion: {
+            type: "string",
+            description: "Dirección del cliente"
+          }
+        },
+        required: ["nombre"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "debt_list",
+      description: "Ver lista de clientes que deben plata",
+      parameters: {
+        type: "object",
+        properties: {
+          solo_vencidas: {
+            type: "boolean",
+            description: "Si es true, solo muestra deudas vencidas"
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "debt_check",
+      description: "Ver deuda de un cliente específico",
+      parameters: {
+        type: "object",
+        properties: {
+          cliente: {
+            type: "string",
+            description: "Nombre del cliente"
+          }
+        },
+        required: ["cliente"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "payment_register",
+      description: "Registrar un pago de un cliente",
+      parameters: {
+        type: "object",
+        properties: {
+          cliente: {
+            type: "string",
+            description: "Nombre del cliente que pagó"
+          },
+          monto: {
+            type: "number",
+            description: "Monto que pagó"
+          },
+          metodo: {
+            type: "string",
+            description: "Método de pago (efectivo, transferencia, etc.)"
+          }
+        },
+        required: ["cliente", "monto"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "sale_register",
+      description: "Registrar una venta/pedido",
+      parameters: {
+        type: "object",
+        properties: {
+          cliente: {
+            type: "string",
+            description: "Nombre del cliente"
+          },
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                producto: { type: "string" },
+                cantidad: { type: "number" },
+                color: { type: "string" },
+                talle: { type: "string" }
+              }
+            },
+            description: "Lista de productos vendidos (con color y talle si aplica)"
+          },
+          pagado: {
+            type: "boolean",
+            description: "Si pagó o va a cuenta corriente"
+          }
+        },
+        required: ["cliente", "items"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "sales_today",
+      description: "Ver las ventas del día",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "product_create",
+      description: "Crear un nuevo producto en el inventario. El SKU se genera automáticamente.",
+      parameters: {
+        type: "object",
+        properties: {
+          nombre: {
+            type: "string",
+            description: "Nombre del producto (ej: 'Remera', 'Jean', 'Camisa')"
+          },
+          categoria: {
+            type: "string",
+            description: "Categoría (ej: 'Remera', 'Jean', 'Camisa', 'Buzo', 'Campera')"
+          },
+          color: {
+            type: "string",
+            description: "Color del producto (ej: 'Negro', 'Blanco', 'Azul')"
+          },
+          talle: {
+            type: "string",
+            description: "Talle (ej: 'S', 'M', 'L', 'XL', '38', '40')"
+          },
+          precio: {
+            type: "number",
+            description: "Precio de venta"
+          },
+          descripcion: {
+            type: "string",
+            description: "Descripción opcional del producto"
+          },
+          temporada: {
+            type: "string",
+            description: "Temporada (opcional): 'Verano', 'Invierno', 'Todo el año'"
+          },
+          proveedor: {
+            type: "string",
+            description: "Nombre del proveedor (opcional)"
+          },
+          stockInicial: {
+            type: "number",
+            description: "Stock inicial (default: 0)"
+          },
+          stockMinimo: {
+            type: "number",
+            description: "Stock mínimo para alerta (default: 5)"
+          }
+        },
+        required: ["nombre", "categoria", "color", "talle", "precio"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "product_search",
+      description: "Buscar productos por SKU, nombre, color, talle o categoría",
+      parameters: {
+        type: "object",
+        properties: {
+          busqueda: {
+            type: "string",
+            description: "Término de búsqueda (SKU, nombre, color, talle, categoría)"
+          }
+        },
+        required: ["busqueda"]
+      }
+    }
+  }
+];

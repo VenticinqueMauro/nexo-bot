@@ -1,0 +1,22 @@
+{
+  "name": "nexo-bot",
+  "version": "1.0.0",
+  "description": "Bot de Telegram para gestión de tienda de ropa",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "keywords": ["telegram", "bot", "cloudflare", "workers", "ai"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "grammy": "^1.21.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240129.0",
+    "typescript": "^5.3.3",
+    "wrangler": "^3.78.12"
+  }
+}

@@ -1,0 +1,59 @@
+import { Bot, webhookCallback } from 'grammy';
+import { Env } from '../types';
+import {
+  authMiddleware,
+  loggingMiddleware,
+  rateLimitMiddleware,
+  errorHandler,
+} from './middleware';
+import {
+  handleStart,
+  handleHelp,
+  handleStock,
+  handleDeudas,
+  handleHoy,
+  handleCancelar,
+  handleMessage,
+  handleVoice,
+  handlePhoto,
+} from './handlers';
+
+/**
+ * Crea y configura el bot de Telegram
+ */
+export function createBot(env: Env): Bot {
+  const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+
+  // Aplicar middleware
+  bot.use(errorHandler());
+  bot.use(loggingMiddleware());
+  bot.use(authMiddleware(env));
+  bot.use(rateLimitMiddleware());
+
+  // Comandos
+  bot.command('start', handleStart);
+  bot.command('help', handleHelp);
+  bot.command('stock', (ctx) => handleStock(ctx, env));
+  bot.command('deudas', (ctx) => handleDeudas(ctx, env));
+  bot.command('hoy', (ctx) => handleHoy(ctx, env));
+  bot.command('cancelar', handleCancelar);
+
+  // Mensajes de voz
+  bot.on('message:voice', (ctx) => handleVoice(ctx, env));
+
+  // Fotos de productos
+  bot.on('message:photo', (ctx) => handlePhoto(ctx, env));
+
+  // Mensajes de texto (lenguaje natural)
+  bot.on('message:text', (ctx) => handleMessage(ctx, env));
+
+  return bot;
+}
+
+/**
+ * Crea el webhook handler para Cloudflare Workers
+ */
+export function createWebhook(env: Env) {
+  const bot = createBot(env);
+  return webhookCallback(bot, 'cloudflare-mod');
+}

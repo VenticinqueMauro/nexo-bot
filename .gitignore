@@ -33,3 +33,15 @@ yarn-error.log*
 
 # OS
 Thumbs.db
+
+# Cloudflare Workers
+.wrangler/
+.dev.vars
+wrangler.toml.local
+
+# Google Service Account credentials
+*service-account*.json
+nexo-bot-*.json
+
+# Claude Code
+.claude/

@@ -1,0 +1,13 @@
+name = "nexo-bot"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Binding para Workers AI
+[ai]
+binding = "AI"
+
+# Variables de entorno (los secretos se agregan con wrangler secret put)
+[vars]
+# Configurar estos valores después del setup
+OWNER_TELEGRAM_ID = "7856132212"
+GOOGLE_SHEETS_ID = "1nQ7HLM3H7MafYahnEubP_WwPSj8iYpN8K3et6cCEX3E"
