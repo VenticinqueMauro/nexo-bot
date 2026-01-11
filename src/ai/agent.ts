@@ -284,14 +284,23 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
         // Solo proceder automáticamente si pagado === true o "true" o "si"
         let pagado = args.pagado;
 
-        // Anti-Alucinación de 'false': Si el usuario no dijo explícitamente "cuenta corriente" o similar,
-        // pero el modelo mandó 'false', lo forzamos a undefined para preguntar.
-        if (pagado === false && userMessage) {
+        if (pagado === undefined) {
+          // Si no viene definido, intentar inferirlo del mensaje solo si es MUY explícito
+          // Pero por seguridad, mejor dejarlo undefined para preguntar
+        }
+
+        if (userMessage) {
           const userMsgLower = userMessage.toLowerCase();
           const explicitCC = ['cuenta corriente', 'cc', 'ctacte', 'c.c.', 'fiado', 'debe', 'no pago', 'sin pagar', 'a cuenta'].some(term => userMsgLower.includes(term));
+          const explicitPaid = ['pago', 'pagó', 'pagada', 'pagado', 'efectivo', 'tarjeta', 'transferencia', 'mp', 'mercado pago', 'alias', 'cvu'].some(term => userMsgLower.includes(term));
 
-          if (!explicitCC) {
+          if (pagado === false && !explicitCC) {
             console.log('Force confirmation: Model predicted pagado=false but user did not be explicit.');
+            pagado = undefined;
+          }
+
+          if (pagado === true && !explicitPaid) {
+            console.log('Force confirmation: Model predicted pagado=true but user did not be explicit.');
             pagado = undefined;
           }
         }

@@ -96,19 +96,20 @@ export async function findProducts(env: Env, searchTerm: string): Promise<Produc
     // Crear string combinado para búsqueda
     const combined = `${nombreLower} ${categoriaLower} ${colorLower} ${talleLower}`;
 
-    // Coincidencia directa en nombre o categoría (usando variants también)
-    if (fuzzyMatch(normalizedSearch, p.nombre) || fuzzyMatch(searchTerm, p.nombre)) {
-      return true;
-    }
-
-    // Check variants for category match
-    if (searchWordsVariants.some(w => w.length > 3 && fuzzyMatch(w, p.categoria))) {
-      return true;
-    }
-
-    // Coincidencia en categoría direct
-    if (fuzzyMatch(searchTerm, p.categoria)) {
-      return true;
+    // Si la búsqueda tiene múltiples palabras, NO usar coincidencia difusa directa
+    // porque "Remera Celeste" machea con "Remera Negra" por la parte "Remera"
+    if (searchWords.length === 1) {
+      if (fuzzyMatch(normalizedSearch, p.nombre) || fuzzyMatch(searchTerm, p.nombre)) {
+        return true;
+      }
+      if (fuzzyMatch(searchTerm, p.categoria)) {
+        return true;
+      }
+    } else {
+      // Para frases compuestas, la coincidencia exacta de nombre completo sí es válida
+      if (p.nombre.toLowerCase() === searchLower) {
+        return true;
+      }
     }
 
     // Verificar si todas las palabras de búsqueda están en el producto combinado

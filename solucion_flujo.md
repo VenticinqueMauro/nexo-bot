@@ -60,4 +60,13 @@ Con estos cambios, el flujo documentado funcionaría así:
 
 **Solución Implementada (`src/ai/agent.ts` + `handlers.ts`):**
 - Si el modelo predice "no pagado" (`false`) pero el usuario no dijo explícitamente "cuenta corriente" o palabras clave, el sistema fuerza la pregunta de confirmación.
+- **[NUEVO]** Lo mismo aplica si predice "pagado" (`true`) pero no hay palabras clave de pago (efectivo, tarjeta, etc.). Esto evita que asuma que se pagó por error.
 - Se agregaron botones rápidos para fechas de vencimiento (7 días, 15 días, etc.) cuando se confirma una deuda.
+
+### 7. Búsqueda de Productos Más Estricta
+**Problema:** Al buscar "Remera Celeste", el bot a veces traía "Remera Negra" porque hacía coincidencia difusa (fuzzy match) con la palabra "Remera" e ignoraba el resto.
+
+**Solución Implementada (`src/sheets/stock.ts`):**
+- Se ajustó la lógica de búsqueda: Si la búsqueda tiene varias palabras (ej: "remera celeste"), ahora se exige que TODAS las palabras coincidan (ya sea exacta o parcialmente) con el producto.
+- La coincidencia difusa "laxa" (donde basta que una parte coincida) ahora solo se aplica si buscás una sola palabra.
+- Esto asegura que "Remera Celeste" nunca traiga una "Remera Negra".
