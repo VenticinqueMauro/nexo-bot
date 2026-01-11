@@ -582,9 +582,15 @@ export async function processMessage(
     // TODO: Cachear preferencias aprendidas en KV para mejor performance
     // const dynamicSystemPrompt = await buildDynamicPrompt(env);
 
+    // Calcular fecha actual para contexto
+    const now = new Date();
+    // Ajuste simple UTC-3
+    now.setHours(now.getHours() - 3);
+    const todayStr = now.toISOString().split('T')[0];
+
     // Construir mensajes para el modelo
     const messages: Message[] = [
-      { role: 'system', content: systemPrompt }, // Usando prompt estático
+      { role: 'system', content: `${systemPrompt}\n\nHOY ES: ${todayStr}.` }, // Inyectar fecha actual
       ...conversationHistory,
       { role: 'user', content: userMessage },
     ];
