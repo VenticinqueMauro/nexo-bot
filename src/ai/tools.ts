@@ -321,5 +321,26 @@ export const tools = [
         required: []
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "whatsapp_reminder",
+      description: "Generar un link de WhatsApp para enviar un mensaje a un cliente. Usar cuando el usuario pida 'mandar mensaje', 'recordar deuda', 'avisar a cliente'.",
+      parameters: {
+        type: "object",
+        properties: {
+          cliente: {
+            type: "string",
+            description: "Nombre del cliente tal cual lo dijo el usuario."
+          },
+          mensaje: {
+            type: "string",
+            description: "El contenido del mensaje a enviar. Si es un recordatorio de deuda, incluir detalles (monto, fecha, etc)."
+          }
+        },
+        required: ["cliente", "mensaje"]
+      }
+    }
   }
 ];

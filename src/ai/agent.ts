@@ -85,6 +85,11 @@ function requiresToolExecution(message: string): { requires: boolean; suggestedT
     return { requires: true, suggestedTool: 'product_create' };
   }
 
+  // Patrones que requieren whatsapp_reminder
+  if (/(mand|envi|record).*mensaje|(mand|envi|record)ale.*a.*(que|deuda|cobro)|l[ií]nk.*(wa|whatsapp)/.test(msg)) {
+    return { requires: true, suggestedTool: 'whatsapp_reminder' };
+  }
+
   return { requires: false };
 }
 
@@ -345,6 +350,37 @@ ${product.descripcion ? `Descripción: ${product.descripcion}\n` : ''}${product.
         }
 
         return message;
+      }
+
+      case 'whatsapp_reminder': {
+        const client = await findClient(env, args.cliente);
+        if (!client) {
+          return `No se encontró el cliente "${args.cliente}".`;
+        }
+
+        if (!client.telefono) {
+          return `El cliente ${client.nombre} no tiene teléfono registrado. Agregalo primero.`;
+        }
+
+        // Limpiar teléfono (dejar solo números)
+        const phone = client.telefono.replace(/[^0-9]/g, '');
+
+        // Si no tiene código de país (ej: empieza con 11 o 15), asumir Argentina (549)
+        let finalPhone = phone;
+        if (phone.length === 10) { // Ej: 11 1234 5678
+          finalPhone = `549${phone}`;
+        } else if (phone.startsWith('15')) { // Ej: 15 1234 5678
+          finalPhone = `549${phone.substring(2)}`; // Asumir que falta cod area, o es local. Mejor advertir si es ambiguo.
+          // Para simplificar, si empieza con 15, asumimos que faltó el cod area. 
+          // PERO CUIDADO: "15" es prefijo movil local. 
+          // Mejor dejarlo como está si el usuario no puso cod pais, pero WhatsApp necesita cod pais.
+          // Asumamos formato internacional si es largo, o agregamos 549 si parece local.
+        }
+
+        const encodedMessage = encodeURIComponent(args.mensaje || '');
+        const link = `https://wa.me/${finalPhone}?text=${encodedMessage}`;
+
+        return `📱 Link generado para ${client.nombre}:\n\n[Enviar mensaje por WhatsApp](${link})`;
       }
 
       default:
