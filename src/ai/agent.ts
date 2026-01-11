@@ -45,6 +45,10 @@ import {
   formatDailySales,
   formatPrice,
 } from '../utils/formatters';
+import {
+  formatMultipleProductsResponse,
+  formatMultipleClientsResponse,
+} from '../utils/selection-state';
 
 interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -141,6 +145,12 @@ async function executeTool(env: Env, toolName: string, args: any): Promise<strin
           if (products.length === 0) {
             return `No se encontró ningún producto que coincida con "${args.producto}".`;
           }
+
+          // Si hay múltiples coincidencias y el término es genérico, mostrar opciones
+          if (products.length > 1 && args.producto.split(' ').length <= 2) {
+            return formatMultipleProductsResponse(products, 'stock_check', args);
+          }
+
           return formatProductInfo(products);
         } else {
           // Resumen de stock general

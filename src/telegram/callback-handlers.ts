@@ -12,6 +12,10 @@ import {
   getConversationHistory,
   getPendingPhoto
 } from '../utils/conversation-state';
+import {
+  getPendingSelection,
+  clearPendingSelection,
+} from '../utils/selection-state';
 import { parseNaturalDate } from '../utils/dates';
 
 /**
@@ -208,32 +212,65 @@ async function handleProductSelection(
   if (productId === 'cancel') {
     await ctx.answerCallbackQuery('❌ Cancelado');
     await ctx.editMessageText('Operación cancelada');
+    clearPendingSelection(userId);
     return;
   }
 
-  // Verificar si hay foto pendiente para asociar
-  const pendingPhotoFileId = await getPendingPhoto(env, userId);
+  // Obtener selección pendiente
+  const pendingSelection = getPendingSelection(userId);
 
-  if (pendingPhotoFileId) {
-    // Asociar foto al producto seleccionado
-    await updateProductPhoto(env, productId, pendingPhotoFileId);
-    await clearPendingPhoto(env, userId);
+  if (pendingSelection && pendingSelection.type === 'product') {
+    const products = pendingSelection.options as any[];
+    const selectedProduct = products.find((p: any) => p.id === productId);
 
-    await ctx.answerCallbackQuery('✓ Foto asociada');
-    await ctx.editMessageText('✓ Foto asociada exitosamente al producto');
+    if (selectedProduct) {
+      await ctx.answerCallbackQuery(`✓ ${selectedProduct.nombre}`);
+      await ctx.editMessageText(
+        `✓ Seleccionado: ${selectedProduct.nombre} ${selectedProduct.color} ${selectedProduct.talle} (${selectedProduct.sku})`
+      );
+
+      // Continuar con la acción original usando el producto seleccionado
+      const history = await getConversationHistory(env, userId);
+
+      // Construir mensaje contextual basado en la acción
+      let contextMessage = '';
+      switch (pendingSelection.action) {
+        case 'stock_check':
+          contextMessage = `Ver stock de ${selectedProduct.nombre} ${selectedProduct.color} ${selectedProduct.talle}`;
+          break;
+        case 'stock_add':
+          contextMessage = `Agregar stock a ${selectedProduct.nombre} ${selectedProduct.color} ${selectedProduct.talle}`;
+          break;
+        case 'sale_register':
+          contextMessage = `Vender ${selectedProduct.nombre} ${selectedProduct.color} ${selectedProduct.talle}`;
+          break;
+        default:
+          contextMessage = `Operación con ${selectedProduct.nombre} ${selectedProduct.color} ${selectedProduct.talle}`;
+      }
+
+      const response = await processMessage(env, contextMessage, history);
+
+      await addMessageToHistory(env, userId, 'user', contextMessage);
+      await addMessageToHistory(env, userId, 'assistant', response);
+
+      await ctx.reply(response);
+
+      // Limpiar selección pendiente
+      clearPendingSelection(userId);
+    }
   } else {
-    await ctx.answerCallbackQuery('✓ Producto seleccionado');
+    // Verificar si hay foto pendiente para asociar (flujo antiguo)
+    const pendingPhotoFileId = await getPendingPhoto(env, userId);
 
-    // Continuar con el procesamiento usando el ID del producto
-    const history = await getConversationHistory(env, userId);
-    const message = `Producto seleccionado: ${productId}`;
+    if (pendingPhotoFileId) {
+      await updateProductPhoto(env, productId, pendingPhotoFileId);
+      await clearPendingPhoto(env, userId);
 
-    const response = await processMessage(env, message, history);
-
-    await addMessageToHistory(env, userId, 'user', message);
-    await addMessageToHistory(env, userId, 'assistant', response);
-
-    await ctx.reply(response);
+      await ctx.answerCallbackQuery('✓ Foto asociada');
+      await ctx.editMessageText('✓ Foto asociada exitosamente al producto');
+    } else {
+      await ctx.answerCallbackQuery('✓ Producto seleccionado');
+    }
   }
 }
 

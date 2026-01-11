@@ -13,6 +13,15 @@ import {
   setPendingPhoto,
   clearPendingPhoto
 } from '../utils/conversation-state';
+import {
+  detectMultipleOptions,
+  formatSelectionMessage,
+  savePendingSelection,
+} from '../utils/selection-state';
+import {
+  productSelectionKeyboard,
+  clientSelectionKeyboard,
+} from './inline-keyboards';
 
 /**
  * Handler para el comando /start
@@ -207,12 +216,56 @@ export async function handleMessage(ctx: Context, env: Env) {
     // Procesar mensaje con AI
     const response = await processMessage(env, message, history);
 
-    // Guardar mensajes en el historial (Durable Object maneja el límite automáticamente)
-    await addMessageToHistory(env, userId, 'user', message);
-    await addMessageToHistory(env, userId, 'assistant', response);
+    // Detectar si la respuesta contiene múltiples opciones
+    const multipleOptions = detectMultipleOptions(response);
 
-    // Enviar respuesta
-    await ctx.reply(response);
+    if (multipleOptions.hasMultiple) {
+      // Guardar en historial solo el mensaje original
+      await addMessageToHistory(env, userId, 'user', message);
+
+      if (multipleOptions.type === 'product') {
+        const { products, action, args } = multipleOptions.data;
+
+        // Guardar selección pendiente
+        savePendingSelection(userId, {
+          type: 'product',
+          action,
+          options: products,
+          originalMessage: message,
+          args,
+          timestamp: Date.now()
+        });
+
+        // Mostrar mensaje con botones
+        const selectionMessage = formatSelectionMessage('product', products.length, action);
+        const keyboard = productSelectionKeyboard(products, 'select_product');
+
+        await ctx.reply(selectionMessage, { reply_markup: keyboard });
+      } else if (multipleOptions.type === 'client') {
+        const { clients, action, args } = multipleOptions.data;
+
+        // Guardar selección pendiente
+        savePendingSelection(userId, {
+          type: 'client',
+          action,
+          options: clients,
+          originalMessage: message,
+          args,
+          timestamp: Date.now()
+        });
+
+        // Mostrar mensaje con botones
+        const selectionMessage = formatSelectionMessage('client', clients.length, action);
+        const keyboard = clientSelectionKeyboard(clients, 'select_client');
+
+        await ctx.reply(selectionMessage, { reply_markup: keyboard });
+      }
+    } else {
+      // Respuesta normal, sin múltiples opciones
+      await addMessageToHistory(env, userId, 'user', message);
+      await addMessageToHistory(env, userId, 'assistant', response);
+      await ctx.reply(response);
+    }
   } catch (error: any) {
     console.error('Error en handleMessage:', error);
     console.error('Stack:', error.stack);
