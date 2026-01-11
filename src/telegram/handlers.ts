@@ -168,58 +168,71 @@ export async function handleMessage(ctx: Context, env: Env) {
     return;
   }
 
-  // Verificar si el usuario está en el flujo de asociar foto
-  const pendingPhotoFileId = pendingPhotos.get(userId);
-  if (pendingPhotoFileId) {
+  try {
+    // Verificar si el usuario está en el flujo de asociar foto
+    const pendingPhotoFileId = pendingPhotos.get(userId);
+    if (pendingPhotoFileId) {
+      await ctx.replyWithChatAction('typing');
+
+      // Buscar el producto mencionado
+      const products = await searchProducts(env, message);
+
+      if (products.length === 0) {
+        await ctx.reply('No encontré ningún producto que coincida. ¿Podés ser más específico? Ejemplo: "Remera negra M" o "REM-NEG-M"');
+        return;
+      }
+
+      if (products.length > 1) {
+        await ctx.reply(`Encontré ${products.length} productos:\n\n${formatProductInfo(products)}\n\n¿Podés especificar cuál? Usa el SKU para mayor precisión.`);
+        return;
+      }
+
+      // Asociar la foto al producto
+      const product = products[0];
+      await updateProductPhoto(env, product.id, pendingPhotoFileId);
+
+      pendingPhotos.delete(userId);
+
+      await ctx.reply(`✓ Foto asociada exitosamente a:\n${product.nombre} ${product.color} ${product.talle}\nSKU: ${product.sku}`);
+      return;
+    }
+
+    // Mostrar indicador de "escribiendo..."
     await ctx.replyWithChatAction('typing');
 
-    // Buscar el producto mencionado
-    const products = await searchProducts(env, message);
+    // Obtener historial de conversación
+    const history = conversationHistory.get(userId) || [];
 
-    if (products.length === 0) {
-      await ctx.reply('No encontré ningún producto que coincida. ¿Podés ser más específico? Ejemplo: "Remera negra M" o "REM-NEG-M"');
-      return;
+    // Procesar mensaje con AI
+    const response = await processMessage(env, message, history);
+
+    // Actualizar historial
+    history.push(
+      { role: 'user', content: message },
+      { role: 'assistant', content: response }
+    );
+
+    // Limitar historial a últimos 10 mensajes
+    if (history.length > 10) {
+      history.splice(0, history.length - 10);
     }
 
-    if (products.length > 1) {
-      await ctx.reply(`Encontré ${products.length} productos:\n\n${formatProductInfo(products)}\n\n¿Podés especificar cuál? Usa el SKU para mayor precisión.`);
-      return;
-    }
+    conversationHistory.set(userId, history);
 
-    // Asociar la foto al producto
-    const product = products[0];
-    await updateProductPhoto(env, product.id, pendingPhotoFileId);
+    // Enviar respuesta
+    await ctx.reply(response);
+  } catch (error: any) {
+    console.error('Error en handleMessage:', error);
+    console.error('Stack:', error.stack);
+    console.error('Message:', message);
 
-    pendingPhotos.delete(userId);
-
-    await ctx.reply(`✓ Foto asociada exitosamente a:\n${product.nombre} ${product.color} ${product.talle}\nSKU: ${product.sku}`);
-    return;
+    // Informar al usuario del error
+    await ctx.reply(
+      '❌ Ups, tuve un problema procesando tu mensaje.\n\n' +
+      'Intentá de nuevo o usá /cancelar para empezar de nuevo.\n\n' +
+      `Error: ${error.message || 'Desconocido'}`
+    );
   }
-
-  // Mostrar indicador de "escribiendo..."
-  await ctx.replyWithChatAction('typing');
-
-  // Obtener historial de conversación
-  const history = conversationHistory.get(userId) || [];
-
-  // Procesar mensaje con AI
-  const response = await processMessage(env, message, history);
-
-  // Actualizar historial
-  history.push(
-    { role: 'user', content: message },
-    { role: 'assistant', content: response }
-  );
-
-  // Limitar historial a últimos 10 mensajes
-  if (history.length > 10) {
-    history.splice(0, history.length - 10);
-  }
-
-  conversationHistory.set(userId, history);
-
-  // Enviar respuesta
-  await ctx.reply(response);
 }
 
 /**
