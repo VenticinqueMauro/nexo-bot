@@ -300,13 +300,16 @@ export async function handleMessage(ctx: Context, env: Env) {
         await ctx.reply(selectionMessage, { reply_markup: keyboard });
       }
     } else if (response.includes('NECESITA_CONFIRMACION:')) {
+      // NO guardar en historial, es un mensaje de confirmación pendiente
+
       // Detectar tipo de confirmación
       if (response.includes('NECESITA_CONFIRMACION:PAGO')) {
         const keyboard = paymentStatusKeyboard();
         await ctx.reply('¿El cliente pagó o va a cuenta corriente?', { reply_markup: keyboard });
       } else {
-        // Otros tipos de confirmación en el futuro
-        await ctx.reply(response.replace(/NECESITA_CONFIRMACION:\w+\s*/g, ''), { parse_mode: 'HTML' });
+        // Otros tipos de confirmación en el futuro (limpiar el marcador)
+        const cleanMessage = response.replace(/NECESITA_CONFIRMACION:\w+\s*/g, '').trim();
+        await ctx.reply(cleanMessage || '¿Confirmás?', { parse_mode: 'HTML' });
       }
     } else if (response.includes('¿Cuándo vence esta deuda?')) {
       const keyboard = deadlineQuickSelectKeyboard();

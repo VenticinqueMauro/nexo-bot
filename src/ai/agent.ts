@@ -717,9 +717,10 @@ export async function processMessage(
 
       console.log('Tool result:', toolResult.substring(0, 200));
 
-      // Si necesita confirmación, retornar directamente (limpiar el marcador interno)
+      // Si necesita confirmación, retornar directamente el marcador
+      // para que handlers.ts lo detecte y muestre los botones correspondientes
       if (toolResult.startsWith('NECESITA_CONFIRMACION:')) {
-        return toolResult.replace(/^NECESITA_CONFIRMACION:\s*/, '');
+        return toolResult; // NO limpiar aquí, dejar que handlers.ts lo procese
       }
 
       // CAMBIO CRÍTICO: Devolver directamente el resultado de la tool
