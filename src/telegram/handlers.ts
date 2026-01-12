@@ -24,6 +24,7 @@ import {
   paymentStatusKeyboard,
   deadlineQuickSelectKeyboard,
 } from './inline-keyboards';
+import { savePendingAction } from './callback-handlers';
 
 /**
  * Handler para el comando /whoami - Muestra el ID del usuario
@@ -304,6 +305,12 @@ export async function handleMessage(ctx: Context, env: Env) {
 
       // Detectar tipo de confirmación
       if (response.includes('NECESITA_CONFIRMACION:PAGO')) {
+        // Guardar el mensaje original del usuario para recuperarlo cuando presione el botón
+        savePendingAction(userId, {
+          type: 'payment_confirmation',
+          data: { originalMessage: message }
+        });
+
         const keyboard = paymentStatusKeyboard();
         await ctx.reply('¿El cliente pagó o va a cuenta corriente?', { reply_markup: keyboard });
       } else {

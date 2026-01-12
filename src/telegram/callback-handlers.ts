@@ -141,16 +141,27 @@ async function handlePaymentStatus(
     { parse_mode: 'Markdown' }
   );
 
-  // Continuar con el procesamiento del mensaje con el estado seleccionado
+  // Recuperar la acción pendiente (el mensaje original del usuario)
+  const pendingAction = getPendingAction(userId);
+
+  if (!pendingAction || pendingAction.type !== 'payment_confirmation') {
+    // Fallback: si no hay acción pendiente, usar método antiguo
+    await ctx.reply('❌ No se encontró la venta pendiente. Por favor, intentá de nuevo.');
+    return;
+  }
+
+  const originalMessage = pendingAction.data.originalMessage;
+
+  // Continuar con el procesamiento del mensaje ORIGINAL + el estado de pago
   const history = await getConversationHistory(env, userId);
-  const messageWithStatus = `Estado de pago: ${statusText}`;
+  const messageWithStatus = `${originalMessage} ${isPaid ? 'y pagó' : 'a cuenta corriente'}`;
 
   const response = await processMessage(env, messageWithStatus, history);
 
   await addMessageToHistory(env, userId, 'user', messageWithStatus);
   await addMessageToHistory(env, userId, 'assistant', response);
 
-  await ctx.reply(response);
+  await ctx.reply(response, { parse_mode: 'HTML' });
 }
 
 /**
@@ -195,7 +206,7 @@ async function handleDeadlineSelection(
   await addMessageToHistory(env, userId, 'user', messageWithDeadline);
   await addMessageToHistory(env, userId, 'assistant', response);
 
-  await ctx.reply(response);
+  await ctx.reply(response, { parse_mode: 'HTML' });
 }
 
 /**
@@ -253,7 +264,7 @@ async function handleProductSelection(
       await addMessageToHistory(env, userId, 'user', contextMessage);
       await addMessageToHistory(env, userId, 'assistant', response);
 
-      await ctx.reply(response);
+      await ctx.reply(response, { parse_mode: 'HTML' });
 
       // Limpiar selección pendiente
       clearPendingSelection(userId);
@@ -302,7 +313,7 @@ async function handleClientSelection(
   await addMessageToHistory(env, userId, 'user', message);
   await addMessageToHistory(env, userId, 'assistant', response);
 
-  await ctx.reply(response);
+  await ctx.reply(response, { parse_mode: 'HTML' });
 }
 
 /**
