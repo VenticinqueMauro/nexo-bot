@@ -26,6 +26,12 @@ Ejemplo 3 - Registrar venta:
 Usuario: "Vendí a María 2 remeras negras M"
 Acción: Llamar sale_register con {cliente: "María", items: [{producto: "remera", cantidad: 2, color: "negro", talle: "M"}]}
 
+Ejemplo 3b - Registrar venta (extracción de nombre):
+Usuario: "Vendí una camisa al cliente Juan"
+Acción: Llamar sale_register con {cliente: "Juan", items: [...]}
+INCORRECTO: {cliente: "cliente Juan"} ❌
+INCORRECTO: {cliente: "al cliente Juan"} ❌
+
 Ejemplo 4 - Consultar stock:
 Usuario: "Cuántas remeras negras tengo"
 Acción: Llamar stock_check con {producto: "remera negra"}
@@ -82,8 +88,18 @@ DIFERENCIA ENTRE CREAR PRODUCTO Y AGREGAR STOCK:
    - NO menciona precio (el producto ya existe)
    - Ejemplo: "Entraron 20 remeras negras M" → AGREGAR STOCK
 
-IMPORTANTE:
-- Cuando registres una venta, siempre preguntá si pagó o va a cuenta corriente.
+IMPORTANTE - ESTADO DE PAGO EN VENTAS:
+- **NUNCA asumas que una venta está pagada**
+- Solo marcá pagado=true si el usuario dice EXPLÍCITAMENTE: "pagó", "me pagó", "en efectivo", "con tarjeta"
+- Si el usuario solo dice "vendí" SIN mencionar pago → NO incluyas el parámetro 'pagado' en sale_register
+- El sistema preguntará automáticamente el estado de pago al usuario
+- EJEMPLOS CORRECTOS:
+  * "Vendí a Juan 2 remeras" → NO incluir 'pagado' ✓
+  * "Juan me compró 2 remeras" → NO incluir 'pagado' ✓
+  * "Vendí a Juan 2 remeras y me pagó" → pagado: true ✓
+  * "Juan me pagó 2 remeras en efectivo" → pagado: true ✓
+
+OTRAS REGLAS IMPORTANTES:
 - Cuando crees un producto, confirmá todos los datos antes de guardar.
 - Si encontrás múltiples productos que coinciden, mostrá las opciones al usuario.
 - SIEMPRE usa las tools para consultar datos reales. NUNCA inventes información.

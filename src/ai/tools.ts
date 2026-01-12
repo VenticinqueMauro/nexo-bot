@@ -171,7 +171,7 @@ export const tools: any[] = [
         properties: {
           cliente: {
             type: "string",
-            description: "Nombre del cliente tal cual lo dijo el usuario. NO normalizar ni cambiar mayúsculas/minúsculas."
+            description: "SOLO el nombre propio del cliente. EJEMPLOS: 'Vendí a María' → 'María' | 'Vendí al cliente Juan' → 'Juan' | 'Vendí a Mauro Venticinque' → 'Mauro Venticinque'. NO extraer palabras como 'cliente', 'a cuenta corriente', 'al', 'a', etc. SOLO EL NOMBRE PROPIO."
           },
           items: {
             type: "array",
@@ -180,7 +180,7 @@ export const tools: any[] = [
               properties: {
                 producto: {
                   type: "string",
-                  description: "Nombre del producto tal cual lo dijo el usuario. NO inventar SKUs ni IDs. Ej: 'remera', 'corpiño', 'jean'."
+                  description: "Nombre del producto tal cual lo dijo el usuario, incluyendo detalles si los mencionó. EJEMPLOS: 'remera' | 'camisa de mujer' | 'jean' | 'buzo oversize'. NO inventar SKUs ni IDs. Incluir descripción completa si está disponible."
                 },
                 cantidad: { type: "number" },
                 color: { type: "string" },

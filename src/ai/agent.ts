@@ -265,32 +265,40 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           }
         }
 
-        // Parsear pagado a boolean
-        // El modelo 70B es confiable, pero seguimos validando casos edge
+        // Parsear pagado a boolean con validación estricta
         let pagado = args.pagado;
 
-        // Normalizar string a boolean si viene como texto
+        // VALIDACIÓN ESTRICTA: Solo aceptar valores muy explícitos
         if (typeof pagado === 'string') {
           const pagadoLower = pagado.toLowerCase().trim();
-          // Casos positivos
-          if (['true', 'si', 'sí', 'yes'].includes(pagadoLower)) {
+
+          // Casos PAGADO (explícitos)
+          if (['true', 'si', 'sí', 'yes', 'pagado', 'pago'].includes(pagadoLower)) {
             pagado = true;
           }
-          // Casos negativos explícitos
-          else if (['false', 'no'].includes(pagadoLower)) {
+          // Casos NO PAGADO (explícitos)
+          else if (['false', 'no', 'cuenta corriente', 'fiado', 'debe'].includes(pagadoLower)) {
             pagado = false;
-          } else {
-            // Si trae texto raro, dejarlo undefined para que pregunte
+          }
+          // Cualquier otro string → forzar pregunta
+          else {
+            console.log(`⚠️ Valor ambiguo de 'pagado': "${pagado}" - forzando confirmación`);
             pagado = undefined;
           }
         }
+        // Si viene como número diferente de 0 o 1, forzar pregunta
+        else if (typeof pagado === 'number' && pagado !== 0 && pagado !== 1) {
+          console.log(`⚠️ Valor numérico inválido de 'pagado': ${pagado} - forzando confirmación`);
+          pagado = undefined;
+        }
 
-        // Si es undefined o null, preguntar
+        // Si es undefined, null, o el modelo no lo incluyó → PREGUNTAR
         if (pagado === undefined || pagado === null) {
+          console.log('ℹ️ Estado de pago no especificado - preguntando al usuario');
           return 'NECESITA_CONFIRMACION:PAGO';
         }
 
-        // Convertir a boolean limpio
+        // Convertir a boolean limpio (solo si llegamos aquí con un valor válido)
         pagado = Boolean(pagado);
 
         // Parsear fecha de vencimiento si viene
@@ -709,9 +717,9 @@ export async function processMessage(
 
       console.log('Tool result:', toolResult.substring(0, 200));
 
-      // Si necesita confirmación, retornar directamente
+      // Si necesita confirmación, retornar directamente (limpiar el marcador interno)
       if (toolResult.startsWith('NECESITA_CONFIRMACION:')) {
-        return toolResult.replace('NECESITA_CONFIRMACION: ', '');
+        return toolResult.replace(/^NECESITA_CONFIRMACION:\s*/, '');
       }
 
       // CAMBIO CRÍTICO: Devolver directamente el resultado de la tool

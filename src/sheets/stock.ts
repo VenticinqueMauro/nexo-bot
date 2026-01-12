@@ -151,17 +151,25 @@ export async function findProducts(env: Env, searchTerm: string): Promise<Produc
       }
     }
 
-    // FILTRO 4: Para búsquedas compuestas (ej: "remera negra")
-    // Verificar que todas las palabras estén en el producto
+    // FILTRO 4: Para búsquedas compuestas (ej: "remera negra" o "camisa de mujer")
+    // Verificar que todas las palabras clave estén en el producto
     const palabrasSinColorTalle = searchWords.filter(w =>
-      !coloresComunes.includes(w) && !tallesComunes.includes(w)
+      !coloresComunes.includes(w) && !tallesComunes.includes(w) && w.length > 2 // Ignorar palabras muy cortas como "de", "el", "la"
     );
 
     if (palabrasSinColorTalle.length > 0) {
       const allWordsMatch = palabrasSinColorTalle.every(word => {
+        // Skip prepositions and articles
+        if (['de', 'del', 'la', 'el', 'los', 'las', 'un', 'una'].includes(word)) {
+          return true;
+        }
+
         // Normalizar palabra para plurales
         const singular = word.endsWith('s') && word.length > 3 ? word.slice(0, -1) : word;
-        return combined.includes(word) || combined.includes(singular);
+        const plural = word + 's';
+
+        // Buscar la palabra, su singular o plural
+        return combined.includes(word) || combined.includes(singular) || combined.includes(plural);
       });
 
       if (!allWordsMatch) return false;
