@@ -16,52 +16,73 @@ export function formatDate(dateStr: string): string {
 }
 
 /**
- * Formatea un resumen de stock
+ * Formatea un resumen de stock con HTML
  */
 export function formatStockSummary(products: Product[]): string {
   const lowStock = products.filter(p => p.stock <= p.stockMinimo);
   const okStock = products.filter(p => p.stock > p.stockMinimo);
 
-  let message = '📦 Resumen de stock:\n\n';
+  let message = '📦 <b>Resumen de Stock</b>\n\n';
 
   if (lowStock.length > 0) {
-    message += '⚠️ Stock bajo:\n';
+    message += '⚠️ <b>Stock Bajo:</b>\n';
     lowStock.forEach(p => {
-      message += `- ${p.nombre} ${p.color} ${p.talle} (${p.sku}): ${p.stock} (mínimo: ${p.stockMinimo})\n`;
+      message += `  • <b>${p.nombre}</b> ${p.color} ${p.talle}\n`;
+      message += `    <code>${p.sku}</code> | Stock: <b>${p.stock}</b> (mín: ${p.stockMinimo})\n`;
     });
     message += '\n';
   }
 
   if (okStock.length > 0) {
-    message += '✓ Stock OK:\n';
+    message += '✅ <b>Stock OK:</b>\n';
     okStock.slice(0, 10).forEach(p => {
-      message += `- ${p.nombre} ${p.color} ${p.talle} (${p.sku}): ${p.stock}\n`;
+      message += `  • <b>${p.nombre}</b> ${p.color} ${p.talle} | <code>${p.sku}</code>\n`;
+      message += `    Stock: <b>${p.stock}</b>\n`;
     });
     if (okStock.length > 10) {
-      message += `... (${okStock.length - 10} productos más)\n`;
+      message += `\n<i>...y ${okStock.length - 10} productos más</i>\n`;
     }
+  }
+
+  if (products.length === 0) {
+    message += '<i>No hay productos registrados todavía.</i>';
   }
 
   return message;
 }
 
 /**
- * Formatea información de un producto
+ * Formatea información de un producto con HTML
  */
 export function formatProductInfo(products: Product[]): string {
   if (products.length === 0) {
-    return 'No se encontraron productos.';
+    return '❌ <i>No se encontraron productos.</i>';
   }
 
-  let message = '';
-  products.forEach(p => {
-    message += `${p.nombre} ${p.color} ${p.talle}\n`;
-    message += `SKU: ${p.sku}\n`;
-    message += `Stock: ${p.stock} unidades\n`;
-    message += `Precio: ${formatPrice(p.precio)}\n`;
-    if (p.descripcion) {
-      message += `Descripción: ${p.descripcion}\n`;
+  let message = products.length > 1 ? `📦 <b>${products.length} productos encontrados:</b>\n\n` : '';
+
+  products.forEach((p, index) => {
+    if (products.length > 1) message += `<b>${index + 1}.</b> `;
+
+    message += `👕 <b>${p.nombre}</b> ${p.color} ${p.talle}\n`;
+    message += `   <code>${p.sku}</code>\n`;
+    message += `   💰 Precio: <b>${formatPrice(p.precio)}</b>\n`;
+    message += `   📦 Stock: <b>${p.stock}</b> unidades`;
+
+    if (p.stock <= p.stockMinimo) {
+      message += ` ⚠️ <i>(bajo)</i>`;
     }
+
+    message += '\n';
+
+    if (p.descripcion) {
+      message += `   📝 ${p.descripcion}\n`;
+    }
+
+    if (p.temporada) {
+      message += `   🌡 ${p.temporada}\n`;
+    }
+
     message += '\n';
   });
 
@@ -69,44 +90,50 @@ export function formatProductInfo(products: Product[]): string {
 }
 
 /**
- * Formatea información de un cliente
+ * Formatea información de un cliente con HTML
  */
 export function formatClientInfo(client: Client, debt?: number, lastOrder?: Order): string {
-  let message = `🏪 ${client.nombre}\n`;
-  message += `Tel: ${client.telefono}\n`;
+  let message = `👤 <b>${client.nombre}</b>\n`;
+  message += `📞 ${client.telefono}\n`;
 
   if (client.direccion) {
-    message += `Dirección: ${client.direccion}\n`;
+    message += `📍 ${client.direccion}\n`;
   }
 
   message += '\n';
 
   if (lastOrder) {
     const daysAgo = Math.floor((Date.now() - new Date(lastOrder.fecha).getTime()) / (1000 * 60 * 60 * 24));
-    message += `Última compra: hace ${daysAgo} días (${formatPrice(lastOrder.total)})\n`;
+    const daysText = daysAgo === 0 ? 'hoy' : daysAgo === 1 ? 'ayer' : `hace ${daysAgo} días`;
+    message += `🛍 <b>Última compra:</b> ${daysText} (${formatPrice(lastOrder.total)})\n`;
   }
 
   if (debt !== undefined) {
-    message += `Deuda actual: ${formatPrice(debt)}\n`;
+    if (debt > 0) {
+      message += `💰 <b>Deuda actual:</b> <b>${formatPrice(debt)}</b> ⚠️\n`;
+    } else {
+      message += `✅ <b>Sin deudas</b>\n`;
+    }
   }
 
   if (client.notas) {
-    message += `\nNotas: ${client.notas}`;
+    message += `\n📝 <i>${client.notas}</i>`;
   }
 
   return message;
 }
 
 /**
- * Formatea lista de deudas
+ * Formatea lista de deudas con HTML
  */
 export function formatDebtList(debts: { client: Client; amount: number; dueDate?: string }[]): string {
   if (debts.length === 0) {
-    return '✓ No hay deudas pendientes';
+    return '✅ <b>No hay deudas pendientes</b> 🎉';
   }
 
   const total = debts.reduce((sum, d) => sum + d.amount, 0);
-  let message = `💰 Deudas pendientes: ${formatPrice(total)}\n\n`;
+  let message = `💰 <b>Deudas Pendientes</b>\n`;
+  message += `<b>Total:</b> ${formatPrice(total)}\n\n`;
 
   const now = new Date();
   const overdue = debts.filter(d => d.dueDate && new Date(d.dueDate) < now);
@@ -114,28 +141,32 @@ export function formatDebtList(debts: { client: Client; amount: number; dueDate?
   const noDate = debts.filter(d => !d.dueDate);
 
   if (overdue.length > 0) {
-    message += '🔴 Vencidas:\n';
+    message += '🔴 <b>Vencidas:</b>\n';
     overdue.forEach(d => {
       const daysOverdue = Math.floor((now.getTime() - new Date(d.dueDate!).getTime()) / (1000 * 60 * 60 * 24));
-      message += `- ${d.client.nombre}: ${formatPrice(d.amount)} (vencido hace ${daysOverdue} días)\n`;
+      message += `  • <b>${d.client.nombre}:</b> ${formatPrice(d.amount)}\n`;
+      message += `    <i>Vencido hace ${daysOverdue} día${daysOverdue !== 1 ? 's' : ''}</i>\n`;
     });
     message += '\n';
   }
 
   if (upcoming.length > 0) {
-    message += '🟡 Por vencer:\n';
+    message += '🟡 <b>Por Vencer:</b>\n';
     upcoming.forEach(d => {
       const daysUntilDue = Math.floor((new Date(d.dueDate!).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      const dueText = daysUntilDue === 0 ? 'vence hoy' : daysUntilDue === 1 ? 'vence mañana' : `vence en ${daysUntilDue} días`;
-      message += `- ${d.client.nombre}: ${formatPrice(d.amount)} (${dueText})\n`;
+      const dueText = daysUntilDue === 0 ? '⚠️ <b>vence hoy</b>' :
+                       daysUntilDue === 1 ? 'vence mañana' :
+                       `vence en ${daysUntilDue} días`;
+      message += `  • <b>${d.client.nombre}:</b> ${formatPrice(d.amount)}\n`;
+      message += `    <i>${dueText}</i>\n`;
     });
     message += '\n';
   }
 
   if (noDate.length > 0) {
-    message += '🟢 Al día:\n';
+    message += '🟢 <b>Sin Fecha:</b>\n';
     noDate.forEach(d => {
-      message += `- ${d.client.nombre}: ${formatPrice(d.amount)}\n`;
+      message += `  • <b>${d.client.nombre}:</b> ${formatPrice(d.amount)}\n`;
     });
   }
 
@@ -143,40 +174,50 @@ export function formatDebtList(debts: { client: Client; amount: number; dueDate?
 }
 
 /**
- * Formatea un resumen de pedido
+ * Formatea un resumen de pedido con HTML
  */
 export function formatOrder(order: Order, products: Product[]): string {
-  let message = `📝 Pedido para ${order.clienteNombre}:\n\n`;
+  let message = `🛍 <b>Pedido para ${order.clienteNombre}</b>\n\n`;
 
-  order.items.forEach(item => {
+  order.items.forEach((item, index) => {
     const product = products.find(p => p.id === item.producto || p.nombre.toLowerCase().includes(item.producto.toLowerCase()));
     const price = product ? product.precio * item.cantidad : 0;
     const productName = product ? product.nombre : item.producto;
-    message += `- ${item.cantidad} ${productName} ${item.color || ''} ${item.talle || ''}: ${formatPrice(price)}\n`;
+
+    message += `<b>${index + 1}.</b> ${item.cantidad}x <b>${productName}</b> ${item.color || ''} ${item.talle || ''}\n`;
+    message += `   ${formatPrice(price)}\n`;
   });
 
-  message += `\nTotal: ${formatPrice(order.total)}`;
+  message += `\n━━━━━━━━━━━━━━━━\n`;
+  message += `💰 <b>Total: ${formatPrice(order.total)}</b>`;
 
   return message;
 }
 
 /**
- * Formatea ventas del día
+ * Formatea ventas del día con HTML
  */
 export function formatDailySales(orders: Order[]): string {
   if (orders.length === 0) {
-    return 'No hay ventas registradas hoy.';
+    return '📊 <b>Ventas de Hoy</b>\n\n<i>No hay ventas registradas todavía.</i>';
   }
 
   const total = orders.reduce((sum, o) => sum + o.total, 0);
+  const totalPagado = orders.filter(o => o.pagado).reduce((sum, o) => sum + o.total, 0);
+  const totalCC = orders.filter(o => !o.pagado).reduce((sum, o) => sum + o.total, 0);
   const today = new Date().toLocaleDateString('es-AR');
 
-  let message = `📊 Ventas de hoy (${today}):\n\n`;
-  message += `${orders.length} pedidos - Total: ${formatPrice(total)}\n\n`;
+  let message = `📊 <b>Ventas del ${today}</b>\n\n`;
+  message += `<b>${orders.length} pedido${orders.length !== 1 ? 's' : ''}</b>\n`;
+  message += `💰 <b>Total:</b> ${formatPrice(total)}\n`;
+  message += `✅ Pagado: ${formatPrice(totalPagado)}\n`;
+  message += `🟡 Cta. Cte.: ${formatPrice(totalCC)}\n\n`;
+  message += `━━━━━━━━━━━━━━━━\n\n`;
 
   orders.forEach((o, i) => {
-    const status = o.pagado ? 'pagó efectivo' : 'cuenta corriente';
-    message += `${i + 1}. ${o.clienteNombre} - ${formatPrice(o.total)} (${status})\n`;
+    const status = o.pagado ? '✅ <i>pagado</i>' : '🟡 <i>cta. cte.</i>';
+    message += `<b>${i + 1}.</b> ${o.clienteNombre}\n`;
+    message += `   ${formatPrice(o.total)} ${status}\n`;
   });
 
   return message;

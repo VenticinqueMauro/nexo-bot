@@ -16,6 +16,10 @@ import {
   formatValidationResult,
 } from '../utils/validators';
 
+// Caché simple en memoria (se resetea con cada deploy)
+let productsCache: { data: Product[]; timestamp: number } | null = null;
+const CACHE_TTL = 30 * 1000; // 30 segundos
+
 interface ProductRow {
   ID: string;
   SKU: string;
@@ -33,9 +37,23 @@ interface ProductRow {
 }
 
 /**
- * Obtiene todos los productos del inventario
+ * Invalida el caché de productos (llamar después de modificaciones)
  */
-export async function getAllProducts(env: Env): Promise<Product[]> {
+export function invalidateProductsCache(): void {
+  productsCache = null;
+}
+
+/**
+ * Obtiene todos los productos del inventario (con caché)
+ */
+export async function getAllProducts(env: Env, useCache: boolean = true): Promise<Product[]> {
+  // Verificar caché
+  if (useCache && productsCache && (Date.now() - productsCache.timestamp < CACHE_TTL)) {
+    console.log('📦 Usando caché de productos');
+    return productsCache.data;
+  }
+
+  console.log('🔄 Cargando productos desde Google Sheets');
   const rows = await getSheetValues(env, 'Productos');
 
   // Debug: Ver qué filas se obtienen
@@ -54,7 +72,7 @@ export async function getAllProducts(env: Env): Promise<Product[]> {
     console.log('Primer producto:', JSON.stringify(objects[0]));
   }
 
-  return objects.map((row) => ({
+  const products = objects.map((row) => ({
     id: row.ID || '',
     sku: row.SKU || '',
     nombre: row.Nombre || '',
@@ -69,6 +87,16 @@ export async function getAllProducts(env: Env): Promise<Product[]> {
     stockMinimo: parseInt(row['Stock Mínimo'] || '0'),
     precio: parseFloat(row.Precio || '0'),
   }));
+
+  // Actualizar caché
+  if (useCache) {
+    productsCache = {
+      data: products,
+      timestamp: Date.now()
+    };
+  }
+
+  return products;
 }
 
 /**
@@ -82,12 +110,17 @@ export async function findProducts(env: Env, searchTerm: string): Promise<Produc
 
   // Extraer posibles atributos del término de búsqueda
   const searchWords = searchLower.split(/\s+/);
-  // Simple plural handling: also check singular version if word ends in 's'
-  const searchWordsVariants = searchWords.flatMap(w =>
-    w.endsWith('s') && w.length > 3 ? [w, w.slice(0, -1)] : [w]
-  );
 
-  return allProducts.filter(p => {
+  // Detectar colores comunes en la búsqueda
+  const coloresComunes = ['negro', 'negra', 'blanco', 'blanca', 'azul', 'rojo', 'roja', 'verde', 'gris', 'rosa', 'amarillo', 'amarilla', 'celeste', 'naranja'];
+  const colorEnBusqueda = searchWords.find(w => coloresComunes.includes(w));
+
+  // Detectar talles en la búsqueda
+  const tallesComunes = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '36', '38', '40', '42', '44', '46', '48'];
+  const talleEnBusqueda = searchWords.find(w => tallesComunes.includes(w));
+
+  // Filtrar productos
+  const results = allProducts.filter(p => {
     const nombreLower = p.nombre.toLowerCase();
     const categoriaLower = p.categoria.toLowerCase();
     const colorLower = p.color.toLowerCase();
@@ -96,8 +129,19 @@ export async function findProducts(env: Env, searchTerm: string): Promise<Produc
     // Crear string combinado para búsqueda
     const combined = `${nombreLower} ${categoriaLower} ${colorLower} ${talleLower}`;
 
-    // Si la búsqueda tiene múltiples palabras, NO usar coincidencia difusa directa
-    // porque "Remera Celeste" machea con "Remera Negra" por la parte "Remera"
+    // FILTRO 1: Si especificó color, debe coincidir
+    if (colorEnBusqueda) {
+      const colorMatch = fuzzyMatch(colorEnBusqueda, colorLower);
+      if (!colorMatch) return false; // Descartamos si el color no coincide
+    }
+
+    // FILTRO 2: Si especificó talle, debe coincidir
+    if (talleEnBusqueda) {
+      if (!talleLower.includes(talleEnBusqueda)) return false;
+    }
+
+    // FILTRO 3: Buscar el nombre/categoría del producto
+    // Si la búsqueda tiene una sola palabra (sin color/talle)
     if (searchWords.length === 1) {
       if (fuzzyMatch(normalizedSearch, p.nombre) || fuzzyMatch(searchTerm, p.nombre)) {
         return true;
@@ -105,26 +149,44 @@ export async function findProducts(env: Env, searchTerm: string): Promise<Produc
       if (fuzzyMatch(searchTerm, p.categoria)) {
         return true;
       }
-    } else {
-      // Para frases compuestas, la coincidencia exacta de nombre completo sí es válida
-      if (p.nombre.toLowerCase() === searchLower) {
-        return true;
-      }
     }
 
-    // Verificar si todas las palabras de búsqueda están en el producto combinado
-    // Esto permite buscar "remera negra" y encontrar producto con nombre="Remera", color="Negro"
-    // Usamos los variants para ser más flexibles (ej: "remeras" -> "remera")
-    const allWordsMatch = searchWords.every(word => {
-      const variants = word.endsWith('s') && word.length > 3 ? [word, word.slice(0, -1)] : [word];
-      return variants.some(v => combined.includes(v));
-    });
+    // FILTRO 4: Para búsquedas compuestas (ej: "remera negra")
+    // Verificar que todas las palabras estén en el producto
+    const palabrasSinColorTalle = searchWords.filter(w =>
+      !coloresComunes.includes(w) && !tallesComunes.includes(w)
+    );
 
-    if (allWordsMatch && searchWords.length > 0) {
-      return true;
+    if (palabrasSinColorTalle.length > 0) {
+      const allWordsMatch = palabrasSinColorTalle.every(word => {
+        // Normalizar palabra para plurales
+        const singular = word.endsWith('s') && word.length > 3 ? word.slice(0, -1) : word;
+        return combined.includes(word) || combined.includes(singular);
+      });
+
+      if (!allWordsMatch) return false;
     }
 
-    return false;
+    return true;
+  });
+
+  // ORDENAR resultados: coincidencias exactas primero
+  return results.sort((a, b) => {
+    const aExactName = a.nombre.toLowerCase() === normalizedSearch;
+    const bExactName = b.nombre.toLowerCase() === normalizedSearch;
+
+    if (aExactName && !bExactName) return -1;
+    if (!aExactName && bExactName) return 1;
+
+    // Si ambos tienen el color buscado, priorizar
+    if (colorEnBusqueda) {
+      const aHasColor = a.color.toLowerCase().includes(colorEnBusqueda);
+      const bHasColor = b.color.toLowerCase().includes(colorEnBusqueda);
+      if (aHasColor && !bHasColor) return -1;
+      if (!aHasColor && bHasColor) return 1;
+    }
+
+    return 0;
   });
 }
 
@@ -272,6 +334,9 @@ export async function addStock(
     notas: notas || 'Entrada manual',
   });
 
+  // Invalidar caché
+  invalidateProductsCache();
+
   return {
     product,
     newStock,
@@ -307,6 +372,9 @@ export async function reduceStock(
     tipo: 'venta',
     referencia,
   });
+
+  // Invalidar caché
+  invalidateProductsCache();
 }
 
 /**
@@ -432,6 +500,9 @@ export async function createProduct(
   ];
 
   await appendRow(env, 'Productos', row);
+
+  // Invalidar caché
+  invalidateProductsCache();
 
   return {
     id,

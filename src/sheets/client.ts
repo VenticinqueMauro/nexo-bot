@@ -148,20 +148,97 @@ export function formatDateForSheet(date: Date = new Date()): string {
 }
 
 /**
- * Busca coincidencias difusas de texto (para búsqueda de clientes/productos)
+ * Calcula la distancia de Levenshtein entre dos strings (para errores de tipeo)
+ */
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length;
+  const n = str2.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = Math.min(
+          dp[i - 1][j - 1] + 1,
+          dp[i - 1][j] + 1,
+          dp[i][j - 1] + 1
+        );
+      }
+    }
+  }
+
+  return dp[m][n];
+}
+
+/**
+ * Normaliza palabras removiendo plurales y variaciones comunes
+ */
+function normalizarPalabra(palabra: string): string {
+  palabra = palabra.toLowerCase().trim();
+
+  // Remover plurales comunes en español
+  if (palabra.endsWith('es') && palabra.length > 4) {
+    return palabra.slice(0, -2);
+  }
+  if (palabra.endsWith('s') && palabra.length > 3) {
+    return palabra.slice(0, -1);
+  }
+
+  return palabra;
+}
+
+/**
+ * Busca coincidencias difusas de texto mejorado (para búsqueda de clientes/productos)
  */
 export function fuzzyMatch(search: string, target: string): boolean {
   const searchLower = search.toLowerCase().trim();
   const targetLower = target.toLowerCase().trim();
 
-  // Coincidencia exacta
+  // 1. Coincidencia exacta (prioridad máxima)
+  if (targetLower === searchLower) {
+    return true;
+  }
+
+  // 2. Coincidencia de substring exacto
   if (targetLower.includes(searchLower)) {
     return true;
   }
 
-  // Coincidencia por palabras
+  // 3. Normalizar y comparar (para plurales)
+  const searchNorm = normalizarPalabra(searchLower);
+  const targetNorm = normalizarPalabra(targetLower);
+
+  if (targetNorm.includes(searchNorm) || searchNorm.includes(targetNorm)) {
+    return true;
+  }
+
+  // 4. Coincidencia por palabras (todas las palabras deben estar)
   const searchWords = searchLower.split(/\s+/);
-  return searchWords.every(word => targetLower.includes(word));
+  if (searchWords.length > 1) {
+    const allWordsMatch = searchWords.every(word => {
+      const wordNorm = normalizarPalabra(word);
+      return targetLower.includes(word) || targetLower.includes(wordNorm);
+    });
+    if (allWordsMatch) {
+      return true;
+    }
+  }
+
+  // 5. Levenshtein para errores de tipeo (solo para palabras individuales cortas)
+  if (searchWords.length === 1 && searchLower.length >= 4) {
+    const maxDistance = Math.floor(searchLower.length * 0.3); // 30% de error permitido
+    const distance = levenshteinDistance(searchLower, targetLower);
+    if (distance <= maxDistance) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

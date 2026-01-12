@@ -33,11 +33,11 @@ export async function handleWhoami(ctx: Context) {
   const username = ctx.from?.username || ctx.from?.first_name || 'Usuario';
 
   await ctx.reply(
-    `👤 *Tu información de Telegram:*\n\n` +
-    `• ID de Usuario: \`${userId}\`\n` +
-    `• Nombre: ${username}\n\n` +
-    `Compartí este ID con el administrador para obtener acceso al bot.`,
-    { parse_mode: 'Markdown' }
+    `👤 <b>Tu información de Telegram:</b>\n\n` +
+    `• <b>ID de Usuario:</b> <code>${userId}</code>\n` +
+    `• <b>Nombre:</b> ${username}\n\n` +
+    `<i>Compartí este ID con el administrador para obtener acceso al bot.</i>`,
+    { parse_mode: 'HTML' }
   );
 }
 
@@ -46,35 +46,36 @@ export async function handleWhoami(ctx: Context) {
  */
 export async function handleStart(ctx: Context) {
   const welcomeMessage = `
-👋 ¡Hola! Soy Nexo, tu asistente para la tienda de ropa.
+👋 <b>¡Hola! Soy Nexo</b>
 
-Podés hablarme en lenguaje natural o usar estos comandos:
+Tu asistente inteligente para la tienda de ropa.
 
-👕 *Gestión de Stock:*
-• "¿Cuántas remeras negras tengo?"
-• "Entraron 20 remeras negras talle M"
-• /stock - Ver resumen de stock
+<b>📦 Gestión de Stock:</b>
+  • "¿Cuántas remeras negras tengo?"
+  • "Entraron 20 remeras negras talle M"
+  • /stock - Ver resumen de stock
 
-🏪 *Clientes:*
-• "Agregá un cliente nuevo: María González, tel 3815551234"
-• "¿Qué onda con Juan?"
+<b>👥 Clientes:</b>
+  • "Agregá cliente: María González, tel 3815551234"
+  • "¿Qué onda con Juan?"
 
-💰 *Ventas y Cobros:*
-• "Vendí a María: 2 remeras negras M y 1 jean azul 40"
-• "Juan me pagó 30 lucas"
-• /deudas - Ver quién debe
-• /hoy - Resumen del día
+<b>💰 Ventas y Cobros:</b>
+  • "Vendí a María: 2 remeras negras M"
+  • "Juan me pagó 30 mil"
+  • /deudas - Ver quién debe
+  • /hoy - Resumen del día
 
-📸 *Fotos de Productos:*
-• Enviá una foto y te ayudo a asociarla a un producto
+<b>📸 Fotos de Productos:</b>
+  • Enviá una foto para asociarla a un producto
 
+━━━━━━━━━━━━━━━━
 ❓ /help - Ayuda completa
-🚫 /cancelar - Cancelar acción pendiente
+🚫 /cancelar - Cancelar acción
 
-*¡Hablame como a un empleado, yo me encargo del resto!*
+<i>¡Hablame como a un empleado, yo me encargo del resto!</i>
   `.trim();
 
-  await ctx.reply(welcomeMessage, { parse_mode: 'Markdown' });
+  await ctx.reply(welcomeMessage, { parse_mode: 'HTML' });
 }
 
 /**
@@ -82,80 +83,80 @@ Podés hablarme en lenguaje natural o usar estos comandos:
  */
 export async function handleHelp(ctx: Context) {
   const helpMessage = `
-📚 *Guía de uso de Nexo*
+📚 <b>Guía de uso de Nexo</b>
 
-*CONSULTAR STOCK:*
-• "¿Cuántas remeras negras tengo?"
-• "¿Cómo estamos de stock?"
-• "¿Hay jeans azules talle 40?"
-• /stock
+<b>📦 CONSULTAR STOCK:</b>
+  • "¿Cuántas remeras negras tengo?"
+  • "¿Cómo estamos de stock?"
+  • "¿Hay jeans azules talle 40?"
+  • /stock
 
-*CREAR PRODUCTOS:*
-• "Agregá producto: Remera negra M, $8000"
-• "Nuevo producto: Jean azul 40, categoría Jean, $25000"
+<b>✨ CREAR PRODUCTOS:</b>
+  • "Agregá producto: Remera negra M, $8000"
+  • "Nuevo: Jean azul 40, categoría Jean, $25000"
 
-*REGISTRAR ENTRADA:*
-• "Entraron 20 remeras negras talle M"
-• "Llegaron 10 jeans azules talle 40"
+<b>📥 REGISTRAR ENTRADA:</b>
+  • "Entraron 20 remeras negras talle M"
+  • "Llegaron 10 jeans azules 40"
 
-*GESTIÓN DE CLIENTES:*
-• "Agregá cliente: María González, tel 3815551234"
-• "¿Qué onda con Juan?"
+<b>👥 GESTIÓN DE CLIENTES:</b>
+  • "Agregá cliente: María González, tel 3815551234"
+  • "¿Qué onda con Juan?"
 
-*REGISTRAR VENTAS:*
-• "Vendí a María: 2 remeras negras M y 1 jean azul 40"
-• "Anotar venta: Juan, 3 buzos grises L"
+<b>🛍 REGISTRAR VENTAS:</b>
+  • "Vendí a María: 2 remeras negras M y 1 jean azul 40"
+  • "Venta: Juan, 3 buzos grises L"
 
-*COBROS Y DEUDAS:*
-• "¿Quién me debe?"
-• "¿Cuánto debe Juan?"
-• "María me pagó 30 mil pesos"
-• /deudas
+<b>💰 COBROS Y DEUDAS:</b>
+  • "¿Quién me debe?"
+  • "¿Cuánto debe Juan?"
+  • "María me pagó 30 mil"
+  • /deudas
 
-*FOTOS DE PRODUCTOS:*
-• Enviá una foto del producto
-• El bot te preguntará a qué producto pertenece
-• Se guardará automáticamente
+<b>📸 FOTOS DE PRODUCTOS:</b>
+  • Enviá una foto del producto
+  • Te preguntaré a qué producto pertenece
+  • Se guardará automáticamente
 
-*RESUMEN DEL DÍA:*
-• "¿Qué vendí hoy?"
-• /hoy
+<b>📊 RESUMEN DEL DÍA:</b>
+  • "¿Qué vendí hoy?"
+  • /hoy
 
-Recordá: podés hablarme naturalmente, yo entiendo 😉
+<i>Recordá: podés hablarme naturalmente, yo entiendo 😉</i>
   `.trim();
 
-  await ctx.reply(helpMessage, { parse_mode: 'Markdown' });
+  await ctx.reply(helpMessage, { parse_mode: 'HTML' });
 }
 
 /**
  * Handler para el comando /stock
  */
 export async function handleStock(ctx: Context, env: Env) {
-  await ctx.reply('📦 Consultando stock...');
+  await ctx.reply('📦 <i>Consultando stock...</i>', { parse_mode: 'HTML' });
 
   const products = await getAllProducts(env);
   const summary = formatStockSummary(products);
 
-  await ctx.reply(summary);
+  await ctx.reply(summary, { parse_mode: 'HTML' });
 }
 
 /**
  * Handler para el comando /deudas
  */
 export async function handleDeudas(ctx: Context, env: Env) {
-  await ctx.reply('💰 Consultando deudas...');
+  await ctx.reply('💰 <i>Consultando deudas...</i>', { parse_mode: 'HTML' });
 
   const debts = await getAllDebts(env);
   const summary = formatDebtList(debts);
 
-  await ctx.reply(summary);
+  await ctx.reply(summary, { parse_mode: 'HTML' });
 }
 
 /**
  * Handler para el comando /hoy
  */
 export async function handleHoy(ctx: Context, env: Env) {
-  await ctx.reply('📊 Generando resumen del día...');
+  await ctx.reply('📊 <i>Generando resumen del día...</i>', { parse_mode: 'HTML' });
 
   const orders = await getTodayOrders(env);
   const lowStock = await getLowStockProducts(env);
@@ -163,13 +164,14 @@ export async function handleHoy(ctx: Context, env: Env) {
   let message = formatDailySales(orders);
 
   if (lowStock.length > 0) {
-    message += '\n\n⚠️ *Alertas de stock bajo:*\n';
+    message += '\n\n⚠️ <b>Alertas de stock bajo:</b>\n';
     lowStock.slice(0, 5).forEach(p => {
-      message += `• ${p.nombre} ${p.color} ${p.talle} (${p.sku}): ${p.stock} (mínimo: ${p.stockMinimo})\n`;
+      message += `  • <b>${p.nombre}</b> ${p.color} ${p.talle} | <code>${p.sku}</code>\n`;
+      message += `    Stock: <b>${p.stock}</b> (mín: ${p.stockMinimo})\n`;
     });
   }
 
-  await ctx.reply(message, { parse_mode: 'Markdown' });
+  await ctx.reply(message, { parse_mode: 'HTML' });
 }
 
 /**
@@ -182,7 +184,11 @@ export async function handleCancelar(ctx: Context, env: Env) {
     await clearPendingPhoto(env, userId);
   }
 
-  await ctx.reply('✓ Acción cancelada. Historial borrado.');
+  await ctx.reply(
+    '✅ <b>Acción cancelada</b>\n\n' +
+    '<i>Historial borrado. Podés empezar de nuevo.</i>',
+    { parse_mode: 'HTML' }
+  );
 }
 
 /**
@@ -206,12 +212,22 @@ export async function handleMessage(ctx: Context, env: Env) {
       const products = await searchProducts(env, message);
 
       if (products.length === 0) {
-        await ctx.reply('No encontré ningún producto que coincida. ¿Podés ser más específico? Ejemplo: "Remera negra M" o "REM-NEG-M"');
+        await ctx.reply(
+          '❌ <b>Producto no encontrado</b>\n\n' +
+          '¿Podés ser más específico?\n\n' +
+          '<i>Ejemplo: "Remera negra M" o el SKU "REM-NEG-M"</i>',
+          { parse_mode: 'HTML' }
+        );
         return;
       }
 
       if (products.length > 1) {
-        await ctx.reply(`Encontré ${products.length} productos:\n\n${formatProductInfo(products)}\n\n¿Podés especificar cuál? Usa el SKU para mayor precisión.`);
+        await ctx.reply(
+          `📦 <b>Encontré ${products.length} productos:</b>\n\n` +
+          `${formatProductInfo(products)}\n\n` +
+          `<i>¿Podés especificar cuál? Usa el SKU para mayor precisión.</i>`,
+          { parse_mode: 'HTML' }
+        );
         return;
       }
 
@@ -221,7 +237,12 @@ export async function handleMessage(ctx: Context, env: Env) {
 
       await clearPendingPhoto(env, userId);
 
-      await ctx.reply(`✓ Foto asociada exitosamente a:\n${product.nombre} ${product.color} ${product.talle}\nSKU: ${product.sku}`);
+      await ctx.reply(
+        `✅ <b>Foto asociada exitosamente</b>\n\n` +
+        `👕 <b>${product.nombre}</b> ${product.color} ${product.talle}\n` +
+        `<code>${product.sku}</code>`,
+        { parse_mode: 'HTML' }
+      );
       return;
     }
 
@@ -288,7 +309,7 @@ export async function handleMessage(ctx: Context, env: Env) {
       // Respuesta normal, sin múltiples opciones
       await addMessageToHistory(env, userId, 'user', message);
       await addMessageToHistory(env, userId, 'assistant', response);
-      await ctx.reply(response);
+      await ctx.reply(response, { parse_mode: 'HTML' });
     }
   } catch (error: any) {
     console.error('Error en handleMessage:', error);
@@ -297,9 +318,11 @@ export async function handleMessage(ctx: Context, env: Env) {
 
     // Informar al usuario del error
     await ctx.reply(
-      '❌ Ups, tuve un problema procesando tu mensaje.\n\n' +
-      'Intentá de nuevo o usá /cancelar para empezar de nuevo.\n\n' +
-      `Error: ${error.message || 'Desconocido'}`
+      '❌ <b>Error</b>\n\n' +
+      'Ups, tuve un problema procesando tu mensaje.\n\n' +
+      '<i>Intentá de nuevo o usá /cancelar para empezar de nuevo.</i>\n\n' +
+      `<code>${error.message || 'Error desconocido'}</code>`,
+      { parse_mode: 'HTML' }
     );
   }
 }
@@ -310,8 +333,10 @@ export async function handleMessage(ctx: Context, env: Env) {
  */
 export async function handleVoice(ctx: Context, env: Env) {
   await ctx.reply(
-    '🎤 Recibí tu mensaje de voz, pero la transcripción aún no está implementada.\n' +
-    'Por ahora, escribime por favor.'
+    '🎤 <b>Mensaje de voz recibido</b>\n\n' +
+    '<i>La transcripción aún no está implementada.</i>\n' +
+    'Por ahora, escribime por favor.',
+    { parse_mode: 'HTML' }
   );
 }
 
@@ -370,11 +395,12 @@ export async function handlePhoto(ctx: Context, env: Env) {
 
   // Si no hay caption, flujo normal (preguntar)
   await ctx.reply(
-    '📸 ¡Foto recibida!\n\n' +
+    '📸 <b>¡Foto recibida!</b>\n\n' +
     '¿A qué producto pertenece esta foto?\n\n' +
     'Podés decirme:\n' +
-    '• El SKU (ej: REM-NEG-M)\n' +
-    '• O describir el producto (ej: "Remera negra M")\n\n' +
-    'Usa /cancelar si querés cancelar.'
+    '  • El SKU (ej: <code>REM-NEG-M</code>)\n' +
+    '  • O describir el producto (ej: "Remera negra M")\n\n' +
+    '<i>Usa /cancelar si querés cancelar.</i>',
+    { parse_mode: 'HTML' }
   );
 }

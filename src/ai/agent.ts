@@ -59,79 +59,44 @@ interface Message {
 }
 
 /**
- * Detecta si el mensaje del usuario requiere una acción de datos
+ * Detecta si el mensaje del usuario requiere una acción de datos (simplificado para 70B)
  */
 function requiresToolExecution(message: string): { requires: boolean; suggestedTool?: string } {
   const msg = message.toLowerCase();
 
-  // PRIMERO: Patrones que requieren sale_register (ventas) - tiene prioridad sobre stock_add
-  if (/vend[iíoó]|venta|compr[oó]|llev[oó]/.test(msg)) {
+  // Patrones básicos para detectar acciones críticas
+  if (/vend[iíoó]|venta/.test(msg)) {
     return { requires: true, suggestedTool: 'sale_register' };
   }
 
-  // Patrones que requieren product_create (PRIORIDAD: crear producto nuevo)
-  // Detectar cuando se menciona precio (indica producto nuevo)
-  if (/(\$|peso|precio).*\d+|(\d+).*(\$|peso|precio)/.test(msg) && /remera|jean|camisa|buzo|producto/.test(msg)) {
+  if (/(\$|peso|precio).*\d+/.test(msg) && /producto|remera|jean|camisa/.test(msg)) {
     return { requires: true, suggestedTool: 'product_create' };
   }
 
-  // Detectar cuando dice explícitamente "nuevo" o "crear"
-  if (/(cre[ao]|nuevo|agreg[aá]).*producto/.test(msg) || /producto.*(nuevo|cre[ao])/.test(msg)) {
-    return { requires: true, suggestedTool: 'product_create' };
-  }
-
-  // Patrones que requieren stock_add (SOLO entrada de mercadería a productos existentes)
-  if (/suma|entr[oóa]|lleg[oóa]|recibi/.test(msg) && /unidad|stock/.test(msg)) {
+  if (/entr[oóa]|lleg[oóa]/.test(msg) && /\d+/.test(msg)) {
     return { requires: true, suggestedTool: 'stock_add' };
   }
 
-  // Patrones que requieren stock_check
-  if (/cu[aá]nt|stock|hay|tengo|quedan/.test(msg) && /remera|jean|camisa|producto/.test(msg)) {
+  if (/cu[aá]nt|stock|hay|tengo/.test(msg)) {
     return { requires: true, suggestedTool: 'stock_check' };
   }
 
-  // Patrones que requieren payment_register
-  if (/pag[oó]|me pag|cobr[eé]/.test(msg)) {
+  if (/pag[oó]|me pag/.test(msg)) {
     return { requires: true, suggestedTool: 'payment_register' };
-  }
-
-  // Patrones que requieren client_add
-  if (/agreg.*cliente|nuevo cliente|registr.*cliente/.test(msg)) {
-    return { requires: true, suggestedTool: 'client_add' };
-  }
-
-  // Patrones que requieren whatsapp_reminder
-  if (/(mand|envi|record).*mensaje|(mand|envi|record)ale.*a.*(que|deuda|cobro)|l[ií]nk.*(wa|whatsapp)/.test(msg)) {
-    return { requires: true, suggestedTool: 'whatsapp_reminder' };
-  }
-
-  // Patrones que requieren order_update_deadline
-  if (/(venc|fech|plazo).*(deuda|pago)|(vence|caduca).*(el|en)/.test(msg)) {
-    return { requires: true, suggestedTool: 'order_update_deadline' };
   }
 
   return { requires: false };
 }
 
 /**
- * Detecta si una respuesta es una "alucinación" que simula ejecutar una acción
+ * Detecta si una respuesta es una "alucinación" (versión simplificada)
  */
 function isHallucinatedResponse(response: string): boolean {
+  // Solo detectamos casos muy obvios con el 70B
   const patterns = [
-    /sumando stock/i,
-    /vendiendo producto/i,
-    /registrando venta/i,
-    /agregando.*unidad/i,
-    /stock actualizado.*\d+.*unidad/i,
-    /voy a (agregar|sumar|registrar|vender)/i,
-    /\*\*sumando/i,
-    /\*\*vendiendo/i,
-    /\*\*registrando/i,
-    /venta registrada/i,
-    /pago registrado/i,
-    /deuda actualizada/i,
-    /stock actualizado/i,
-    /producto creado/i,
+    /venta registrada.*exitosamente/i,
+    /producto creado.*exitosamente/i,
+    /stock actualizado.*\d+ unidades/i,
   ];
 
   return patterns.some(p => p.test(response));
@@ -173,11 +138,23 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
             args.color,
             args.talle
           );
-          return `✓ Registrado. Stock de ${result.product.nombre} ${result.product.color} ${result.product.talle} actualizado: ${result.newStock} (+${args.cantidad})`;
+          return `✅ <b>Stock actualizado</b>\n\n` +
+                 `📦 <b>${result.product.nombre}</b> ${result.product.color} ${result.product.talle}\n` +
+                 `<code>${result.product.sku}</code>\n\n` +
+                 `Stock nuevo: <b>${result.newStock}</b> unidades (+${args.cantidad})`;
         } catch (error: any) {
           // Si el error es que no se encontró el producto, sugerir crearlo
           if (error.message && error.message.includes('No se encontró el producto')) {
-            return `❌ ${error.message}\n\n💡 **Sugerencia:** Parece que este producto no existe todavía. ¿Querés que lo cree primero?\n\nPara crear el producto, necesito:\n- Nombre: ${args.producto}\n- Categoría: (¿Es una Remera, Jean, Camisa, Buzo, etc.?)\n- Color: ${args.color || '(especificar)'}\n- Talle: ${args.talle || '(especificar)'}\n- Precio: (especificar)\n\nDecime "Sí, crealo con categoría X y precio $Y" o dame los datos completos.`;
+            return `❌ <b>Producto no encontrado</b>\n\n` +
+                   `${error.message}\n\n` +
+                   `💡 <b>Sugerencia:</b> <i>Parece que este producto no existe todavía.</i>\n\n` +
+                   `Para crearlo, necesito:\n` +
+                   `• <b>Nombre:</b> ${args.producto}\n` +
+                   `• <b>Categoría:</b> Remera / Jean / Camisa / Buzo / etc.\n` +
+                   `• <b>Color:</b> ${args.color || '(especificar)'}\n` +
+                   `• <b>Talle:</b> ${args.talle || '(especificar)'}\n` +
+                   `• <b>Precio:</b> (especificar)\n\n` +
+                   `Decime: "Crealo como [Categoría] a $[Precio]"`;
           }
           throw error;
         }
@@ -222,7 +199,10 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           args.telefono || '',
           args.direccion
         );
-        return `✓ Cliente registrado: ${client.nombre}\nTel: ${client.telefono}${args.direccion ? `\nDirección: ${args.direccion}` : ''}`;
+        return `✅ <b>Cliente registrado</b>\n\n` +
+               `👤 <b>${client.nombre}</b>\n` +
+               `📞 ${client.telefono}` +
+               (args.direccion ? `\n📍 ${args.direccion}` : '');
       }
 
       case 'debt_list': {
@@ -265,7 +245,13 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
 
         const remainingDebt = await getClientDebt(env, payment.clienteId);
 
-        return `✓ Pago registrado: ${formatPrice(payment.monto)} de ${payment.clienteNombre}\nDeuda restante: ${formatPrice(remainingDebt)}`;
+        return `✅ <b>Pago registrado</b>\n\n` +
+               `👤 <b>${payment.clienteNombre}</b>\n` +
+               `💵 Monto: <b>${formatPrice(payment.monto)}</b>\n` +
+               `💳 Método: ${args.metodo || 'efectivo'}\n\n` +
+               (remainingDebt > 0
+                 ? `⚠️ Deuda restante: <b>${formatPrice(remainingDebt)}</b>`
+                 : `✅ <b>Saldó toda la deuda</b> 🎉`);
       }
 
       case 'sale_register': {
@@ -280,19 +266,18 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
         }
 
         // Parsear pagado a boolean
-        // SIEMPRE PREGUNTAR si el usuario no especificó que PAGÓ
-        // Solo proceder automáticamente si pagado === true o "true" o "si"
+        // El modelo 70B es confiable, pero seguimos validando casos edge
         let pagado = args.pagado;
 
-        // 1. Normalizar string a boolean si viene como texto
+        // Normalizar string a boolean si viene como texto
         if (typeof pagado === 'string') {
-          const pagadoLower = pagado.toLowerCase();
+          const pagadoLower = pagado.toLowerCase().trim();
           // Casos positivos
-          if (['true', 'si', 'sí', 'pago', 'pagó', 'efectivo', 'tarjeta', 'transferencia'].some(s => pagadoLower.includes(s))) {
+          if (['true', 'si', 'sí', 'yes'].includes(pagadoLower)) {
             pagado = true;
           }
           // Casos negativos explícitos
-          else if (['false', 'no', 'cuenta corriente', 'cc', 'ctacte', 'debe', 'fiado'].some(s => pagadoLower.includes(s))) {
+          else if (['false', 'no'].includes(pagadoLower)) {
             pagado = false;
           } else {
             // Si trae texto raro, dejarlo undefined para que pregunte
@@ -300,26 +285,13 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           }
         }
 
-        if (userMessage && typeof pagado === 'boolean') {
-          const userMsgLower = userMessage.toLowerCase();
-          const explicitCC = ['cuenta corriente', 'cc', 'ctacte', 'c.c.', 'fiado', 'debe', 'no pago', 'sin pagar', 'a cuenta'].some(term => userMsgLower.includes(term));
-          const explicitPaid = ['pago', 'pagó', 'pagada', 'pagado', 'efectivo', 'tarjeta', 'transferencia', 'mp', 'mercado pago', 'alias', 'cvu'].some(term => userMsgLower.includes(term));
-
-          if (pagado === false && !explicitCC) {
-            console.log('Force confirmation: Model predicted pagado=false but user did not be explicit.');
-            pagado = undefined;
-          }
-
-          if (pagado === true && !explicitPaid) {
-            console.log('Force confirmation: Model predicted pagado=true but user did not be explicit.');
-            pagado = undefined;
-          }
-        }
-
-        // 3. Si sigue indefinido, solicitar confirmación al usuario
+        // Si es undefined o null, preguntar
         if (pagado === undefined || pagado === null) {
           return 'NECESITA_CONFIRMACION:PAGO';
         }
+
+        // Convertir a boolean limpio
+        pagado = Boolean(pagado);
 
         // Parsear fecha de vencimiento si viene
         let vencimiento: string | undefined = undefined;
@@ -355,17 +327,21 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
         let message = formatOrder(order, allProducts);
 
         if (pagado) {
-          message += `\n\n✓ Venta registrada y PAGADA ($${order.total.toLocaleString('es-AR')})\nStock actualizado.`;
+          message += `\n\n✅ <b>Venta registrada y PAGADA</b>\n`;
+          message += `💰 Total: <b>${formatPrice(order.total)}</b>\n`;
+          message += `📦 <i>Stock actualizado</i>`;
         } else {
-          message += `\n\n✓ Venta registrada en CUENTA CORRIENTE\nDeuda: $${order.total.toLocaleString('es-AR')}`;
+          message += `\n\n🟡 <b>Venta en CUENTA CORRIENTE</b>\n`;
+          message += `💰 Deuda: <b>${formatPrice(order.total)}</b>\n`;
 
           if (vencimiento) {
-            message += `\n📅 Vence el: ${vencimiento}`;
+            message += `📅 Vence el: <b>${vencimiento}</b>\n`;
           } else {
-            message += `\n\n⚠️ ¿Cuándo vence esta deuda? (Respondé "en 7 días", "el 20", etc)`;
+            message += `\n⚠️ <i>¿Cuándo vence esta deuda?</i>\n`;
+            message += `<i>(Respondé "en 7 días", "el 20", etc)</i>\n`;
           }
 
-          message += `\nStock actualizado.`;
+          message += `📦 <i>Stock actualizado</i>`;
         }
 
         return message;
@@ -397,7 +373,10 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
 
         await updateOrderDeadline(env, lastUnpaid.id, deadline);
 
-        return `✅ Agendado. La deuda de ${client.nombre} ($${lastUnpaid.total}) del ${lastUnpaid.fecha} vence el **${deadline}**.`;
+        return `✅ <b>Vencimiento agendado</b>\n\n` +
+               `👤 <b>${client.nombre}</b>\n` +
+               `💰 Deuda: <b>${formatPrice(lastUnpaid.total)}</b>\n` +
+               `📅 Vence el: <b>${deadline}</b>`;
       }
 
       case 'sales_stats': {
@@ -495,12 +474,15 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           }
         }
 
-        return `✓ Producto creado exitosamente:
-${product.nombre} ${product.color} ${product.talle}
-SKU: ${product.sku}
-Precio: ${formatPrice(product.precio)}
-Stock inicial: ${product.stock}
-${product.descripcion ? `Descripción: ${product.descripcion}\n` : ''}${product.temporada ? `Temporada: ${product.temporada}\n` : ''}${product.proveedor ? `Proveedor: ${product.proveedor}` : ''}${args.fotoId ? '\n📸 Foto asociada.' : ''}`;
+        return `✅ <b>Producto creado exitosamente</b>\n\n` +
+               `👕 <b>${product.nombre}</b> ${product.color} ${product.talle}\n` +
+               `<code>${product.sku}</code>\n\n` +
+               `💰 Precio: <b>${formatPrice(product.precio)}</b>\n` +
+               `📦 Stock inicial: <b>${product.stock}</b> unidades\n` +
+               (product.descripcion ? `📝 ${product.descripcion}\n` : '') +
+               (product.temporada ? `🌡 ${product.temporada}\n` : '') +
+               (product.proveedor ? `🏭 Proveedor: ${product.proveedor}\n` : '') +
+               (args.fotoId ? `📸 <i>Foto asociada</i>` : '');
       }
 
       case 'product_search': {
@@ -521,7 +503,9 @@ ${product.descripcion ? `Descripción: ${product.descripcion}\n` : ''}${product.
           args.contextoAdicional
         );
 
-        return `✓ Aprendido! Ya sé que cuando decís "${preference.terminoUsuario}" te referís a: ${preference.mapeo}. Voy a recordarlo para la próxima.`;
+        return `🧠 <b>¡Aprendido!</b>\n\n` +
+               `Ya sé que cuando decís "<i>${preference.terminoUsuario}</i>" te referís a: <b>${preference.mapeo}</b>.\n\n` +
+               `Lo voy a recordar para la próxima 😉`;
       }
 
       case 'learning_stats': {
@@ -654,14 +638,14 @@ export async function processMessage(
       { role: 'user', content: userMessage },
     ];
 
-    // Llamar a Workers AI con timeout de 8 segundos
+    // Llamar a Workers AI con timeout de 12 segundos (70B necesita más tiempo)
     let response: any = await withTimeout(
-      env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+      env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
         messages,
         tools,
-        max_tokens: 200, // Reducido para respuestas más rápidas
+        max_tokens: 300, // Aumentado porque 70B da mejores respuestas
       }),
-      8000,
+      12000,
       'AI request timeout - el modelo tardó demasiado en responder'
     );
 
@@ -759,12 +743,12 @@ export async function processMessage(
 
         try {
           const retryResponse: any = await withTimeout(
-            env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+            env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
               messages: retryMessages,
               tools,
-              max_tokens: 200,
+              max_tokens: 300,
             }),
-            8000,
+            12000,
             'AI retry timeout'
           );
 

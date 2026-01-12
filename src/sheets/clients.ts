@@ -9,6 +9,10 @@ import {
   fuzzyMatch,
 } from './client';
 
+// Caché simple en memoria
+let clientsCache: { data: Client[]; timestamp: number } | null = null;
+const CACHE_TTL = 30 * 1000; // 30 segundos
+
 interface ClientRow {
   ID: string;
   Nombre: string;
@@ -19,13 +23,27 @@ interface ClientRow {
 }
 
 /**
- * Obtiene todos los clientes
+ * Invalida el caché de clientes
  */
-export async function getAllClients(env: Env): Promise<Client[]> {
+export function invalidateClientsCache(): void {
+  clientsCache = null;
+}
+
+/**
+ * Obtiene todos los clientes (con caché)
+ */
+export async function getAllClients(env: Env, useCache: boolean = true): Promise<Client[]> {
+  // Verificar caché
+  if (useCache && clientsCache && (Date.now() - clientsCache.timestamp < CACHE_TTL)) {
+    console.log('📦 Usando caché de clientes');
+    return clientsCache.data;
+  }
+
+  console.log('🔄 Cargando clientes desde Google Sheets');
   const rows = await getSheetValues(env, 'Clientes');
   const objects = rowsToObjects<ClientRow>(rows);
 
-  return objects.map((row) => ({
+  const clients = objects.map((row) => ({
     id: row.ID || '',
     nombre: row.Nombre || '',
     telefono: row['Teléfono'] || '',
@@ -33,6 +51,16 @@ export async function getAllClients(env: Env): Promise<Client[]> {
     notas: row.Notas || '',
     fechaAlta: row['Fecha Alta'] || '',
   }));
+
+  // Actualizar caché
+  if (useCache) {
+    clientsCache = {
+      data: clients,
+      timestamp: Date.now()
+    };
+  }
+
+  return clients;
 }
 
 /**
@@ -96,6 +124,9 @@ export async function addClient(
     notas || '',
     fechaAlta,
   ]);
+
+  // Invalidar caché
+  invalidateClientsCache();
 
   return {
     id,

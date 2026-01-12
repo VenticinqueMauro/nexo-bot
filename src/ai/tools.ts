@@ -1,7 +1,7 @@
 /**
  * Definición de tools para Workers AI (Llama 3.1 function calling)
  */
-export const tools = [
+export const tools: any[] = [
   {
     type: "function",
     function: {
