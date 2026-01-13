@@ -404,7 +404,7 @@ export async function handleMessage(ctx: Context, env: Env) {
       }
     } else if (response.includes('¿Cuándo vence esta deuda?')) {
       const keyboard = deadlineQuickSelectKeyboard();
-      await ctx.reply(response, { reply_markup: keyboard });
+      await ctx.reply(response, { reply_markup: keyboard, parse_mode: 'HTML' });
     } else {
       // Respuesta normal, sin múltiples opciones
       await addMessageToHistory(env, userId, 'user', message);
@@ -480,7 +480,7 @@ export async function handlePhoto(ctx: Context, env: Env) {
       await addMessageToHistory(env, userId, 'user', caption); // Guardamos el caption original
       await addMessageToHistory(env, userId, 'assistant', response);
 
-      await ctx.reply(response);
+      await ctx.reply(response, { parse_mode: 'HTML' });
 
       // Si el AI creó un producto (detectado por texto o algo), podríamos borrar la foto pendiente
       // Por ahora, la foto queda pendiente hasta que se asocie explícitamente

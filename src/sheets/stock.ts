@@ -115,8 +115,10 @@ export async function findProducts(env: Env, searchTerm: string): Promise<Produc
   const coloresComunes = ['negro', 'negra', 'blanco', 'blanca', 'azul', 'rojo', 'roja', 'verde', 'gris', 'rosa', 'amarillo', 'amarilla', 'celeste', 'naranja'];
   const colorEnBusqueda = searchWords.find(w => coloresComunes.includes(w));
 
-  // Detectar talles en la búsqueda
-  const tallesComunes = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl', '36', '38', '40', '42', '44', '46', '48'];
+  // Detectar talles en la búsqueda (incluyendo talles infantiles)
+  const tallesComunes = ['xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl',
+                         '0', '2', '4', '6', '8', '10', '12', '14', '16', '18', // Talles infantiles
+                         '36', '38', '40', '42', '44', '46', '48', '50']; // Talles adultos
   const talleEnBusqueda = searchWords.find(w => tallesComunes.includes(w));
 
   // Filtrar productos
@@ -207,31 +209,60 @@ export async function findProduct(
   color?: string,
   talle?: string
 ): Promise<Product | null> {
-  const products = await findProducts(env, nombre);
+  // Primero intentar con el término de búsqueda que incluye potencialmente el talle
+  let products = await findProducts(env, nombre);
 
   if (products.length === 0) {
     return null;
   }
 
-  // Si hay color y talle, filtrar por ellos
+  // Si hay color y talle especificados, filtrar con prioridad
   if (color && talle) {
-    const match = products.find(p =>
-      p.color.toLowerCase() === color.toLowerCase() &&
-      p.talle.toLowerCase() === talle.toLowerCase()
+    const talleLower = talle.toLowerCase();
+    const colorLower = color.toLowerCase();
+
+    // Buscar coincidencia exacta de color y talle
+    const exactMatch = products.find(p =>
+      p.color.toLowerCase() === colorLower &&
+      p.talle.toLowerCase() === talleLower
     );
-    return match || products[0];
+    if (exactMatch) return exactMatch;
+
+    // Buscar coincidencia fuzzy de color y talle
+    const fuzzyMatch = products.find(p =>
+      p.color.toLowerCase().includes(colorLower) &&
+      p.talle.toLowerCase() === talleLower
+    );
+    if (fuzzyMatch) return fuzzyMatch;
+
+    // Si no hay match, devolver el primero
+    return products[0];
   }
 
   // Si solo hay color, filtrar por color
   if (color) {
-    const match = products.find(p => p.color.toLowerCase() === color.toLowerCase());
+    const colorLower = color.toLowerCase();
+    const match = products.find(p =>
+      p.color.toLowerCase() === colorLower ||
+      p.color.toLowerCase().includes(colorLower)
+    );
     return match || products[0];
   }
 
-  // Si solo hay talle, filtrar por talle
+  // Si solo hay talle, filtrar por talle (MEJORADO)
   if (talle) {
-    const match = products.find(p => p.talle.toLowerCase() === talle.toLowerCase());
-    return match || products[0];
+    const talleLower = talle.toLowerCase();
+
+    // Buscar coincidencia exacta
+    const exactMatch = products.find(p => p.talle.toLowerCase() === talleLower);
+    if (exactMatch) return exactMatch;
+
+    // Buscar si el producto contiene el talle (para casos como "S, M, L")
+    const partialMatch = products.find(p => p.talle.toLowerCase().includes(talleLower));
+    if (partialMatch) return partialMatch;
+
+    // Si no hay match, devolver el primero
+    return products[0];
   }
 
   // Si solo hay un producto, devolverlo

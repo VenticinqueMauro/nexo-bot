@@ -490,39 +490,107 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
       }
 
       case 'product_create': {
-        const product = await createProduct(
-          env,
-          args.nombre,
-          args.categoria,
-          args.color,
-          args.talle,
-          args.precio,
-          args.descripcion,
-          args.temporada,
-          args.proveedor,
-          args.stockInicial || 0,
-          args.stockMinimo || 5
-        );
+        const { parseMultipleSizes, hasMultipleSizes, distributeQuantity } = await import('../utils/parsers');
 
-        // Si viene fotoId, asociar la foto
-        if (args.fotoId) {
-          try {
-            await updateProductPhoto(env, product.id, args.fotoId);
-          } catch (e: any) {
-            console.error('Error asociando foto al crear producto:', e);
-            // No fallamos la operación completa, solo logueamos
+        // Detectar si hay múltiples talles
+        const multipleSizes = hasMultipleSizes(args.talle || '');
+
+        if (multipleSizes) {
+          // CASO: Múltiples talles → Crear un producto por cada talle
+          const sizes = parseMultipleSizes(args.talle);
+          const stockInicial = args.stockInicial || 0;
+
+          console.log(`📦 Detectados ${sizes.length} talles: ${sizes.join(', ')}`);
+          console.log(`📊 Distribuyendo stock total (${stockInicial}) entre ${sizes.length} productos`);
+
+          // Distribuir stock entre los talles
+          const stockDistribution = distributeQuantity(stockInicial, sizes.length);
+
+          const createdProducts = [];
+
+          for (let i = 0; i < sizes.length; i++) {
+            const size = sizes[i];
+            const stockForSize = stockDistribution[i];
+
+            console.log(`  → Creando producto talle ${size} con stock ${stockForSize}`);
+
+            const product = await createProduct(
+              env,
+              args.nombre,
+              args.categoria,
+              args.color || '',
+              size, // Talle individual
+              args.precio,
+              args.descripcion,
+              args.temporada,
+              args.proveedor,
+              stockForSize,
+              args.stockMinimo || 5
+            );
+
+            // Si viene fotoId, asociar la foto a todos los productos
+            if (args.fotoId) {
+              try {
+                await updateProductPhoto(env, product.id, args.fotoId);
+              } catch (e: any) {
+                console.error(`Error asociando foto al producto talle ${size}:`, e);
+              }
+            }
+
+            createdProducts.push(product);
           }
-        }
 
-        return `✅ <b>Producto creado exitosamente</b>\n\n` +
-               `👕 <b>${product.nombre}</b> ${product.color} ${product.talle}\n` +
-               `<code>${product.sku}</code>\n\n` +
-               `💰 Precio: <b>${formatPrice(product.precio)}</b>\n` +
-               `📦 Stock inicial: <b>${product.stock}</b> unidades\n` +
-               (product.descripcion ? `📝 ${product.descripcion}\n` : '') +
-               (product.temporada ? `🌡 ${product.temporada}\n` : '') +
-               (product.proveedor ? `🏭 Proveedor: ${product.proveedor}\n` : '') +
-               (args.fotoId ? `📸 <i>Foto asociada</i>` : '');
+          // Construir mensaje de respuesta para múltiples productos
+          let message = `✅ <b>Creados ${createdProducts.length} productos</b>\n\n`;
+          message += `👕 <b>${args.nombre}</b> ${args.color || ''}\n`;
+          message += `💰 Precio: <b>${formatPrice(args.precio)}</b> c/u\n\n`;
+
+          createdProducts.forEach(p => {
+            message += `• Talle <b>${p.talle}</b> - Stock: <b>${p.stock}</b> - <code>${p.sku}</code>\n`;
+          });
+
+          if (args.fotoId) {
+            message += `\n📸 <i>Foto asociada a todos los productos</i>`;
+          }
+
+          return message;
+
+        } else {
+          // CASO: Talle único o sin talle → Crear un solo producto
+          const product = await createProduct(
+            env,
+            args.nombre,
+            args.categoria,
+            args.color || '',
+            args.talle || '',
+            args.precio,
+            args.descripcion,
+            args.temporada,
+            args.proveedor,
+            args.stockInicial || 0,
+            args.stockMinimo || 5
+          );
+
+          // Si viene fotoId, asociar la foto
+          if (args.fotoId) {
+            try {
+              await updateProductPhoto(env, product.id, args.fotoId);
+            } catch (e: any) {
+              console.error('Error asociando foto al crear producto:', e);
+              // No fallamos la operación completa, solo logueamos
+            }
+          }
+
+          return `✅ <b>Producto creado exitosamente</b>\n\n` +
+                 `👕 <b>${product.nombre}</b> ${product.color} ${product.talle}\n` +
+                 `<code>${product.sku}</code>\n\n` +
+                 `💰 Precio: <b>${formatPrice(product.precio)}</b>\n` +
+                 `📦 Stock inicial: <b>${product.stock}</b> unidades\n` +
+                 (product.descripcion ? `📝 ${product.descripcion}\n` : '') +
+                 (product.temporada ? `🌡 ${product.temporada}\n` : '') +
+                 (product.proveedor ? `🏭 Proveedor: ${product.proveedor}\n` : '') +
+                 (args.fotoId ? `📸 <i>Foto asociada</i>` : '');
+        }
       }
 
       case 'product_search': {
