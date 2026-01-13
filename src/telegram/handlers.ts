@@ -207,8 +207,69 @@ export async function handleMessage(ctx: Context, env: Env) {
   }
 
   try {
-    // Verificar si hay una acción pendiente de fecha personalizada
+    // Verificar si hay una acción pendiente
     const pendingAction = getPendingAction(userId);
+
+    // Capturar monto de pago parcial
+    if (pendingAction && pendingAction.type === 'partial_payment_amount') {
+      await ctx.replyWithChatAction('typing');
+
+      // Extraer monto del mensaje (números)
+      const montoMatch = message.match(/[\d,.]+/);
+      if (!montoMatch) {
+        await ctx.reply('❌ No entendí el monto. Por favor, escribí solo el número (ej: 50000 o 50.000)');
+        // Volver a guardar el estado
+        savePendingAction(userId, pendingAction);
+        return;
+      }
+
+      // Parsear monto (eliminar puntos y comas, luego convertir a número)
+      const montoStr = montoMatch[0].replace(/[.,]/g, '');
+      const monto = parseFloat(montoStr);
+
+      if (isNaN(monto) || monto <= 0) {
+        await ctx.reply('❌ El monto debe ser un número positivo. Intentá de nuevo.');
+        savePendingAction(userId, pendingAction);
+        return;
+      }
+
+      // Guardar monto y cambiar estado a pregunta de vencimiento
+      savePendingAction(userId, {
+        type: 'partial_payment_deadline',
+        data: {
+          originalMessage: pendingAction.data.originalMessage,
+          montoParcial: monto
+        }
+      });
+
+      const keyboard = deadlineQuickSelectKeyboard();
+      await ctx.reply(
+        `✓ Anotado: $${monto.toLocaleString('es-AR')}\n\n¿Cuándo vence el resto?`,
+        { reply_markup: keyboard }
+      );
+      return;
+    }
+
+    // Capturar fecha personalizada (pago parcial)
+    if (pendingAction && pendingAction.type === 'custom_partial_deadline_input') {
+      await ctx.replyWithChatAction('typing');
+
+      const { originalMessage, montoParcial } = pendingAction.data;
+      const history = await getConversationHistory(env, userId);
+
+      // Construir mensaje con toda la información incluyendo la fecha ingresada
+      const messageWithFullContext = `${originalMessage}. IMPORTANTE: El cliente pagó PARCIAL ${montoParcial} pesos, el resto vence: ${message}`;
+
+      const response = await processMessage(env, messageWithFullContext, history);
+
+      await addMessageToHistory(env, userId, 'user', originalMessage);
+      await addMessageToHistory(env, userId, 'assistant', response);
+
+      await ctx.reply(response, { parse_mode: 'HTML' });
+      return;
+    }
+
+    // Capturar fecha personalizada (todo a cuenta)
     if (pendingAction && pendingAction.type === 'custom_deadline_input') {
       await ctx.replyWithChatAction('typing');
 

@@ -2,6 +2,23 @@ export function parseNaturalDate(input: string): string | null {
     const now = new Date();
     const text = input.trim().toLowerCase();
 
+    // YYYY-MM-DD (fecha ya formateada en formato ISO) - DEBE IR PRIMERO
+    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+        // Ya está en formato correcto, validar que sea fecha válida
+        const year = parseInt(isoMatch[1]);
+        const month = parseInt(isoMatch[2]) - 1; // JS months 0-11
+        const day = parseInt(isoMatch[3]);
+        const testDate = new Date(year, month, day);
+
+        // Verificar que la fecha sea válida
+        if (testDate.getFullYear() === year &&
+            testDate.getMonth() === month &&
+            testDate.getDate() === day) {
+            return text; // Ya está en formato correcto
+        }
+    }
+
     // "en X dias"
     const enDiasMatch = text.match(/en (\d+) d[ií]as?/);
     if (enDiasMatch) {
@@ -27,8 +44,9 @@ export function parseNaturalDate(input: string): string | null {
         return formatDateISO(target);
     }
 
-    // "18/01" o "18-01"
-    const dateMatch = text.match(/(\d{1,2})[\/-](\d{1,2})/);
+    // "DD/MM" o "DD-MM" (sin año)
+    // Hacemos más restrictiva la regex para que no matchee años (máximo 2 dígitos)
+    const dateMatch = text.match(/^(\d{1,2})[\/-](\d{1,2})$/);
     if (dateMatch) {
         const day = parseInt(dateMatch[1]);
         const month = parseInt(dateMatch[2]) - 1; // JS months 0-11
@@ -39,6 +57,16 @@ export function parseNaturalDate(input: string): string | null {
         if (target.getTime() < now.getTime() - 90 * 24 * 60 * 60 * 1000) {
             target.setFullYear(year + 1);
         }
+        return formatDateISO(target);
+    }
+
+    // "DD/MM/YYYY" o "DD-MM-YYYY" (con año completo)
+    const fullDateMatch = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if (fullDateMatch) {
+        const day = parseInt(fullDateMatch[1]);
+        const month = parseInt(fullDateMatch[2]) - 1; // JS months 0-11
+        const year = parseInt(fullDateMatch[3]);
+        const target = new Date(year, month, day);
         return formatDateISO(target);
     }
 

@@ -85,7 +85,8 @@ export async function registerSale(
   clienteNombre: string,
   items: OrderItem[],
   pagado: boolean = false,
-  vencimiento?: string
+  vencimiento?: string,
+  montoParcial?: number
 ): Promise<Order> {
   // Buscar o validar cliente
   const client = await findClient(env, clienteNombre);
@@ -172,6 +173,19 @@ export async function registerSale(
     pagado ? 'si' : 'no',
     vencimiento || '-', // Columna Vencimiento
   ]);
+
+  // Si hay pago parcial, registrarlo automáticamente
+  if (montoParcial && montoParcial > 0 && !pagado) {
+    const { registerPayment } = await import('./payments');
+    await registerPayment(
+      env,
+      client.nombre,
+      montoParcial,
+      'efectivo', // Método por defecto
+      id, // Asociar al pedido recién creado
+      'Pago inicial al momento de la venta'
+    );
+  }
 
   return {
     id,

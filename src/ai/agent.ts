@@ -265,41 +265,58 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           }
         }
 
+        // Detectar pago parcial en el mensaje del usuario
+        let montoParcial: number | undefined = undefined;
+        if (userMessage) {
+          const parcialMatch = userMessage.match(/pagó\s+PARCIAL\s+([\d,.]+)\s+pesos/i);
+          if (parcialMatch) {
+            const montoStr = parcialMatch[1].replace(/[.,]/g, '');
+            montoParcial = parseFloat(montoStr);
+            console.log(`💵 Pago parcial detectado: ${montoParcial}`);
+          }
+        }
+
         // Parsear pagado a boolean con validación estricta
         let pagado = args.pagado;
 
-        // VALIDACIÓN ESTRICTA: Solo aceptar valores muy explícitos
-        if (typeof pagado === 'string') {
-          const pagadoLower = pagado.toLowerCase().trim();
+        // Si hay pago parcial, forzar pagado=false (porque queda deuda)
+        if (montoParcial && montoParcial > 0) {
+          pagado = false;
+          console.log('ℹ️ Pago parcial detectado - estableciendo pagado=false');
+        } else {
+          // VALIDACIÓN ESTRICTA: Solo aceptar valores muy explícitos
+          if (typeof pagado === 'string') {
+            const pagadoLower = pagado.toLowerCase().trim();
 
-          // Casos PAGADO (explícitos)
-          if (['true', 'si', 'sí', 'yes', 'pagado', 'pago'].includes(pagadoLower)) {
-            pagado = true;
+            // Casos PAGADO (explícitos)
+            if (['true', 'si', 'sí', 'yes', 'pagado', 'pago'].includes(pagadoLower)) {
+              pagado = true;
+            }
+            // Casos NO PAGADO (explícitos)
+            else if (['false', 'no', 'cuenta corriente', 'fiado', 'debe'].includes(pagadoLower)) {
+              pagado = false;
+            }
+            // Cualquier otro string → forzar pregunta
+            else {
+              console.log(`⚠️ Valor ambiguo de 'pagado': "${pagado}" - forzando confirmación`);
+              pagado = undefined;
+            }
           }
-          // Casos NO PAGADO (explícitos)
-          else if (['false', 'no', 'cuenta corriente', 'fiado', 'debe'].includes(pagadoLower)) {
-            pagado = false;
-          }
-          // Cualquier otro string → forzar pregunta
-          else {
-            console.log(`⚠️ Valor ambiguo de 'pagado': "${pagado}" - forzando confirmación`);
+          // Si viene como número diferente de 0 o 1, forzar pregunta
+          else if (typeof pagado === 'number' && pagado !== 0 && pagado !== 1) {
+            console.log(`⚠️ Valor numérico inválido de 'pagado': ${pagado} - forzando confirmación`);
             pagado = undefined;
           }
-        }
-        // Si viene como número diferente de 0 o 1, forzar pregunta
-        else if (typeof pagado === 'number' && pagado !== 0 && pagado !== 1) {
-          console.log(`⚠️ Valor numérico inválido de 'pagado': ${pagado} - forzando confirmación`);
-          pagado = undefined;
-        }
 
-        // Si es undefined, null, o el modelo no lo incluyó → PREGUNTAR
-        if (pagado === undefined || pagado === null) {
-          console.log('ℹ️ Estado de pago no especificado - preguntando al usuario');
-          return 'NECESITA_CONFIRMACION:PAGO';
-        }
+          // Si es undefined, null, o el modelo no lo incluyó → PREGUNTAR
+          if (pagado === undefined || pagado === null) {
+            console.log('ℹ️ Estado de pago no especificado - preguntando al usuario');
+            return 'NECESITA_CONFIRMACION:PAGO';
+          }
 
-        // Convertir a boolean limpio (solo si llegamos aquí con un valor válido)
-        pagado = Boolean(pagado);
+          // Convertir a boolean limpio (solo si llegamos aquí con un valor válido)
+          pagado = Boolean(pagado);
+        }
 
         // Parsear fecha de vencimiento si viene
         let vencimiento: string | undefined = undefined;
@@ -319,7 +336,7 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
 
         // Si es a cuenta corriente y NO tiene vencimiento establecido (y no se especificó explicitamente que no tenga),
         // PREGUNTAR para dar opción de botones rápidos
-        if (pagado === false && !vencimiento && !explicitNoDeadline) {
+        if (pagado === false && !vencimiento && !explicitNoDeadline && !montoParcial) {
           return '¿Cuándo vence esta deuda?';
         }
 
@@ -328,7 +345,8 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           args.cliente,
           items,
           pagado,
-          vencimiento
+          vencimiento,
+          montoParcial
         );
 
         const allProducts = await getAllProducts(env);
@@ -338,7 +356,21 @@ async function executeTool(env: Env, toolName: string, args: any, userMessage?: 
           message += `\n\n✅ <b>Venta registrada y PAGADA</b>\n`;
           message += `💰 Total: <b>${formatPrice(order.total)}</b>\n`;
           message += `📦 <i>Stock actualizado</i>`;
+        } else if (montoParcial && montoParcial > 0) {
+          // Pago parcial
+          const deudaRestante = order.total - montoParcial;
+          message += `\n\n💵 <b>Venta con PAGO PARCIAL</b>\n`;
+          message += `💰 Total: <b>${formatPrice(order.total)}</b>\n`;
+          message += `✅ Pagó ahora: <b>${formatPrice(montoParcial)}</b>\n`;
+          message += `🟡 Queda a deber: <b>${formatPrice(deudaRestante)}</b>\n`;
+
+          if (vencimiento) {
+            message += `📅 Vence el: <b>${vencimiento}</b>\n`;
+          }
+
+          message += `📦 <i>Stock actualizado</i>`;
         } else {
+          // Todo a cuenta
           message += `\n\n🟡 <b>Venta en CUENTA CORRIENTE</b>\n`;
           message += `💰 Deuda: <b>${formatPrice(order.total)}</b>\n`;
 

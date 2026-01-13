@@ -14,12 +14,15 @@ export function confirmationKeyboard(callbackPrefix: string): InlineKeyboard {
 }
 
 /**
- * Botones para estado de pago (Pagado / A Cuenta)
+ * Botones para estado de pago (Pagado / Pago Parcial / A Cuenta)
  */
 export function paymentStatusKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
-    .text('💰 Pagado', 'payment_status:paid')
-    .text('📋 A Cuenta', 'payment_status:credit');
+    .text('💰 Pagado completo', 'payment_status:paid')
+    .row()
+    .text('💵 Pago parcial', 'payment_status:partial')
+    .row()
+    .text('📋 Todo a cuenta', 'payment_status:credit');
 }
 
 /**
