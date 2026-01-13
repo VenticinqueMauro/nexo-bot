@@ -17,6 +17,7 @@ import {
   clearPendingSelection,
 } from '../utils/selection-state';
 import { parseNaturalDate } from '../utils/dates';
+import { deadlineQuickSelectKeyboard } from './inline-keyboards';
 
 /**
  * Interfaz para estado pendiente de confirmación
@@ -152,16 +153,31 @@ async function handlePaymentStatus(
 
   const originalMessage = pendingAction.data.originalMessage;
 
-  // Continuar con el procesamiento del mensaje ORIGINAL + el estado de pago
-  const history = await getConversationHistory(env, userId);
-  const messageWithStatus = `${originalMessage} ${isPaid ? 'y pagó' : 'a cuenta corriente'}`;
+  if (isPaid) {
+    // Si es pagado, procesar directamente con un mensaje explícito
+    const history = await getConversationHistory(env, userId);
+    const messageWithStatus = `${originalMessage}. IMPORTANTE: El cliente PAGÓ, usar pagado=true`;
 
-  const response = await processMessage(env, messageWithStatus, history);
+    const response = await processMessage(env, messageWithStatus, history);
 
-  await addMessageToHistory(env, userId, 'user', messageWithStatus);
-  await addMessageToHistory(env, userId, 'assistant', response);
+    await addMessageToHistory(env, userId, 'user', originalMessage);
+    await addMessageToHistory(env, userId, 'assistant', response);
 
-  await ctx.reply(response, { parse_mode: 'HTML' });
+    await ctx.reply(response, { parse_mode: 'HTML' });
+  } else {
+    // Si es a cuenta corriente, preguntar fecha de vencimiento PRIMERO
+    // Guardar el contexto para usarlo después
+    savePendingAction(userId, {
+      type: 'deadline_selection',
+      data: {
+        originalMessage,
+        isPaid: false
+      }
+    });
+
+    const keyboard = deadlineQuickSelectKeyboard();
+    await ctx.reply('¿Cuándo vence esta deuda?', { reply_markup: keyboard });
+  }
 }
 
 /**
@@ -176,14 +192,40 @@ async function handleDeadlineSelection(
   const userId = ctx.from?.id;
   if (!userId) return;
 
+  // Recuperar el contexto guardado (mensaje original + estado de pago)
+  const pendingAction = getPendingAction(userId);
+
   if (days === 'none') {
     await ctx.answerCallbackQuery('✓ Sin vencimiento');
     await ctx.editMessageText('Vencimiento: Sin fecha límite');
+
+    // Si hay contexto guardado, procesar la venta sin vencimiento
+    if (pendingAction && pendingAction.type === 'deadline_selection') {
+      const { originalMessage, isPaid } = pendingAction.data;
+      const history = await getConversationHistory(env, userId);
+      const messageWithStatus = `${originalMessage}. IMPORTANTE: El cliente NO PAGÓ (pagado=false), sin vencimiento específico.`;
+
+      const response = await processMessage(env, messageWithStatus, history);
+
+      await addMessageToHistory(env, userId, 'user', originalMessage);
+      await addMessageToHistory(env, userId, 'assistant', response);
+
+      await ctx.reply(response, { parse_mode: 'HTML' });
+    }
     return;
   }
 
   if (days === 'custom') {
     await ctx.answerCallbackQuery();
+
+    // Guardar el estado para cuando el usuario escriba la fecha personalizada
+    if (pendingAction && pendingAction.type === 'deadline_selection') {
+      savePendingAction(userId, {
+        type: 'custom_deadline_input',
+        data: pendingAction.data
+      });
+    }
+
     await ctx.reply('Indicame la fecha de vencimiento (ej: "en 10 días", "el 25", "DD/MM/YYYY")');
     return;
   }
@@ -197,16 +239,32 @@ async function handleDeadlineSelection(
     { parse_mode: 'Markdown' }
   );
 
-  // Continuar con el procesamiento
-  const history = await getConversationHistory(env, userId);
-  const messageWithDeadline = `Fecha de vencimiento: ${deadline}`;
+  // Si hay contexto guardado, procesar la venta completa con todos los datos
+  if (pendingAction && pendingAction.type === 'deadline_selection') {
+    const { originalMessage, isPaid } = pendingAction.data;
+    const history = await getConversationHistory(env, userId);
 
-  const response = await processMessage(env, messageWithDeadline, history);
+    // Construir mensaje explícito con TODA la información
+    const messageWithFullContext = `${originalMessage}. IMPORTANTE: El cliente NO PAGÓ (pagado=false), vencimiento: ${deadline}`;
 
-  await addMessageToHistory(env, userId, 'user', messageWithDeadline);
-  await addMessageToHistory(env, userId, 'assistant', response);
+    const response = await processMessage(env, messageWithFullContext, history);
 
-  await ctx.reply(response, { parse_mode: 'HTML' });
+    await addMessageToHistory(env, userId, 'user', originalMessage);
+    await addMessageToHistory(env, userId, 'assistant', response);
+
+    await ctx.reply(response, { parse_mode: 'HTML' });
+  } else {
+    // Flujo antiguo (por compatibilidad)
+    const history = await getConversationHistory(env, userId);
+    const messageWithDeadline = `Fecha de vencimiento: ${deadline}`;
+
+    const response = await processMessage(env, messageWithDeadline, history);
+
+    await addMessageToHistory(env, userId, 'user', messageWithDeadline);
+    await addMessageToHistory(env, userId, 'assistant', response);
+
+    await ctx.reply(response, { parse_mode: 'HTML' });
+  }
 }
 
 /**

@@ -4,6 +4,7 @@ import { processMessage } from '../ai/agent';
 import { getAllProducts, getLowStockProducts, searchProducts, updateProductPhoto } from '../sheets/stock';
 import { getAllDebts } from '../sheets/payments';
 import { getTodayOrders } from '../sheets/sales';
+import { addClient } from '../sheets/clients';
 import { formatStockSummary, formatDebtList, formatDailySales, formatProductInfo } from '../utils/formatters';
 import {
   getConversationHistory,
@@ -24,7 +25,7 @@ import {
   paymentStatusKeyboard,
   deadlineQuickSelectKeyboard,
 } from './inline-keyboards';
-import { savePendingAction } from './callback-handlers';
+import { savePendingAction, getPendingAction } from './callback-handlers';
 
 /**
  * Handler para el comando /whoami - Muestra el ID del usuario
@@ -58,6 +59,7 @@ Tu asistente inteligente para la tienda de ropa.
 
 <b>👥 Clientes:</b>
   • "Agregá cliente: María González, tel 3815551234"
+  • Enviá un contacto de tu agenda para registro rápido
   • "¿Qué onda con Juan?"
 
 <b>💰 Ventas y Cobros:</b>
@@ -102,6 +104,7 @@ export async function handleHelp(ctx: Context) {
 
 <b>👥 GESTIÓN DE CLIENTES:</b>
   • "Agregá cliente: María González, tel 3815551234"
+  • Enviá un contacto para registro automático
   • "¿Qué onda con Juan?"
 
 <b>🛍 REGISTRAR VENTAS:</b>
@@ -204,6 +207,26 @@ export async function handleMessage(ctx: Context, env: Env) {
   }
 
   try {
+    // Verificar si hay una acción pendiente de fecha personalizada
+    const pendingAction = getPendingAction(userId);
+    if (pendingAction && pendingAction.type === 'custom_deadline_input') {
+      await ctx.replyWithChatAction('typing');
+
+      const { originalMessage } = pendingAction.data;
+      const history = await getConversationHistory(env, userId);
+
+      // Construir mensaje con toda la información incluyendo la fecha ingresada
+      const messageWithFullContext = `${originalMessage}. IMPORTANTE: El cliente NO PAGÓ (pagado=false), vencimiento: ${message}`;
+
+      const response = await processMessage(env, messageWithFullContext, history);
+
+      await addMessageToHistory(env, userId, 'user', originalMessage);
+      await addMessageToHistory(env, userId, 'assistant', response);
+
+      await ctx.reply(response, { parse_mode: 'HTML' });
+      return;
+    }
+
     // Verificar si el usuario está en el flujo de asociar foto
     const pendingPhotoFileId = await getPendingPhoto(env, userId);
     if (pendingPhotoFileId) {
@@ -419,4 +442,76 @@ export async function handlePhoto(ctx: Context, env: Env) {
     '<i>Usa /cancelar si querés cancelar.</i>',
     { parse_mode: 'HTML' }
   );
+}
+
+/**
+ * Handler para contactos (registro rápido de clientes)
+ */
+export async function handleContact(ctx: Context, env: Env) {
+  const userId = ctx.from?.id;
+  if (!userId) {
+    return;
+  }
+
+  const contact = ctx.message?.contact;
+  if (!contact) {
+    return;
+  }
+
+  try {
+    await ctx.replyWithChatAction('typing');
+
+    // Extraer información del contacto
+    const firstName = contact.first_name || '';
+    const lastName = contact.last_name || '';
+    const phoneNumber = contact.phone_number || '';
+
+    // Construir nombre completo
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    if (!fullName) {
+      await ctx.reply(
+        '❌ <b>Error</b>\n\n' +
+        'El contacto no tiene nombre. Por favor, enviá un contacto válido.',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    // Registrar el cliente usando addClient
+    const client = await addClient(env, fullName, phoneNumber, '');
+
+    await ctx.reply(
+      '✅ <b>Cliente registrado desde contacto</b>\n\n' +
+      `👤 <b>${client.nombre}</b>\n` +
+      `📞 ${client.telefono || 'Sin teléfono'}\n\n` +
+      '<i>Ya podés usarlo para registrar ventas o consultar deudas.</i>',
+      { parse_mode: 'HTML' }
+    );
+
+    // Guardar en historial para contexto
+    await addMessageToHistory(env, userId, 'user', `[Contacto compartido: ${fullName}]`);
+    await addMessageToHistory(env, userId, 'assistant', `Cliente ${fullName} registrado exitosamente`);
+
+  } catch (error: any) {
+    console.error('Error en handleContact:', error);
+
+    // Si es un error de cliente duplicado, mostrar mensaje específico
+    if (error.message && error.message.includes('ya existe')) {
+      await ctx.reply(
+        '⚠️ <b>Cliente ya existe</b>\n\n' +
+        `${error.message}\n\n` +
+        '<i>Podés usarlo directamente para ventas.</i>',
+        { parse_mode: 'HTML' }
+      );
+    } else {
+      await ctx.reply(
+        '❌ <b>Error</b>\n\n' +
+        'Ups, tuve un problema registrando el contacto.\n\n' +
+        '<i>Intentá de nuevo o registralo manualmente con:</i>\n' +
+        '<code>Agregá cliente: [Nombre], tel [Teléfono]</code>',
+        { parse_mode: 'HTML' }
+      );
+    }
+  }
 }

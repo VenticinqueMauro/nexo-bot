@@ -16,6 +16,7 @@ import {
   handleMessage,
   handleVoice,
   handlePhoto,
+  handleContact,
   handleWhoami,
 } from './handlers';
 import { handleCallbackQuery } from './callback-handlers';
@@ -49,6 +50,9 @@ export function createBot(env: Env): Bot {
 
   // Fotos de productos
   bot.on('message:photo', (ctx) => handlePhoto(ctx, env));
+
+  // Contactos (registro rápido de clientes)
+  bot.on('message:contact', (ctx) => handleContact(ctx, env));
 
   // Mensajes de texto (lenguaje natural)
   bot.on('message:text', (ctx) => handleMessage(ctx, env));
