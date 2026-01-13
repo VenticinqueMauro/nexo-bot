@@ -64,26 +64,43 @@ export async function transcribeAudio(
 
     // 3. Llamar a Whisper en Workers AI
     // Usando whisper-large-v3-turbo para mejor velocidad y precisión
-    // También soporta español y otros idiomas automáticamente
     const response: any = await env.AI.run(
       '@cf/openai/whisper-large-v3-turbo',
       {
         audio: audioBase64, // Base64 string como requiere Workers AI
+        language: 'es', // Forzar español para mejor precisión
+        vad_filter: true, // Filtrar ruido y mejorar detección de voz
+        // Prompt inicial con contexto de términos comunes de la tienda
+        initial_prompt: 'Vendí remera jean buzo camisa pantalón cliente stock productos colores talles números cantidad pagó debe',
       }
     );
 
-    console.log('Whisper response:', JSON.stringify(response).substring(0, 200));
+    console.log('Whisper response:', JSON.stringify(response).substring(0, 500));
 
     // 4. Extraer el texto transcrito
     let transcription = '';
 
     // El formato de respuesta puede variar, intentar diferentes formatos
     if (typeof response === 'object' && response !== null) {
+      // Logging de información de transcripción (idioma detectado, duración, etc.)
+      if ('transcription_info' in response) {
+        const info = response.transcription_info as any;
+        console.log(`📊 Idioma: ${info.language || 'N/A'} (confianza: ${(info.language_probability * 100).toFixed(1)}%)`);
+        console.log(`⏱️ Duración: ${info.duration?.toFixed(2)}s`);
+      }
+
       // Formato 1: { text: "..." }
       if ('text' in response && typeof response.text === 'string') {
         transcription = response.text;
       }
-      // Formato 2: { vtt: "WEBVTT\n..." } (formato de subtítulos)
+      // Formato 2: { segments: [...] } - Workers AI usa este formato
+      else if ('segments' in response && Array.isArray(response.segments)) {
+        transcription = response.segments
+          .map((seg: any) => seg.text || '')
+          .join('')
+          .trim();
+      }
+      // Formato 3: { vtt: "WEBVTT\n..." } (formato de subtítulos)
       else if ('vtt' in response && typeof response.vtt === 'string') {
         // Extraer texto del formato VTT
         const vttText = response.vtt as string;
@@ -95,7 +112,7 @@ export async function transcribeAudio(
         });
         transcription = lines.join(' ').trim();
       }
-      // Formato 3: Array de words/segments
+      // Formato 4: Array de words
       else if ('words' in response && Array.isArray(response.words)) {
         transcription = response.words.map((w: any) => w.word || w.text || '').join(' ');
       }
