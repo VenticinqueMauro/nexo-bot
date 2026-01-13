@@ -30,6 +30,7 @@ export default {
           body: JSON.stringify({
             url: webhookUrl,
             allowed_updates: ['message', 'callback_query'],
+            // Los mensajes de voz y audio se incluyen dentro de 'message'
           }),
         });
 

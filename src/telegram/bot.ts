@@ -15,6 +15,7 @@ import {
   handleCancelar,
   handleMessage,
   handleVoice,
+  handleAudio,
   handlePhoto,
   handleContact,
   handleWhoami,
@@ -47,6 +48,9 @@ export function createBot(env: Env): Bot {
 
   // Mensajes de voz
   bot.on('message:voice', (ctx) => handleVoice(ctx, env));
+
+  // Mensajes de audio (archivos de audio)
+  bot.on('message:audio', (ctx) => handleAudio(ctx, env));
 
   // Fotos de productos
   bot.on('message:photo', (ctx) => handlePhoto(ctx, env));

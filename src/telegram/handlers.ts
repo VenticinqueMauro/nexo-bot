@@ -71,6 +71,10 @@ Tu asistente inteligente para la tienda de ropa.
 <b>📸 Fotos de Productos:</b>
   • Enviá una foto para asociarla a un producto
 
+<b>🎤 Mensajes de Voz y Audio:</b>
+  • Enviá un mensaje de voz y lo transcribiré automáticamente
+  • También podés enviar archivos de audio
+
 ━━━━━━━━━━━━━━━━
 ❓ /help - Ayuda completa
 🚫 /cancelar - Cancelar acción
@@ -122,11 +126,17 @@ export async function handleHelp(ctx: Context) {
   • Te preguntaré a qué producto pertenece
   • Se guardará automáticamente
 
+<b>🎤 MENSAJES DE VOZ Y AUDIO:</b>
+  • Enviá un mensaje de voz (botón de micrófono)
+  • O adjuntá un archivo de audio
+  • Lo transcribiré automáticamente
+  • Luego procesaré tu pedido como texto
+
 <b>📊 RESUMEN DEL DÍA:</b>
   • "¿Qué vendí hoy?"
   • /hoy
 
-<i>Recordá: podés hablarme naturalmente, yo entiendo 😉</i>
+<i>Recordá: podés hablarme naturalmente, por texto o voz 😉</i>
   `.trim();
 
   await ctx.reply(helpMessage, { parse_mode: 'HTML' });
@@ -429,15 +439,260 @@ export async function handleMessage(ctx: Context, env: Env) {
 
 /**
  * Handler para mensajes de voz (transcripción)
- * TODO: Implementar transcripción con Whisper cuando esté disponible en Workers AI
  */
 export async function handleVoice(ctx: Context, env: Env) {
-  await ctx.reply(
-    '🎤 <b>Mensaje de voz recibido</b>\n\n' +
-    '<i>La transcripción aún no está implementada.</i>\n' +
-    'Por ahora, escribime por favor.',
-    { parse_mode: 'HTML' }
-  );
+  const userId = ctx.from?.id;
+  if (!userId) {
+    return;
+  }
+
+  const voice = ctx.message?.voice;
+  if (!voice) {
+    return;
+  }
+
+  try {
+    // Mostrar indicador de "escribiendo..." mientras se procesa
+    await ctx.replyWithChatAction('typing');
+
+    // Mostrar mensaje temporal de procesamiento
+    const processingMsg = await ctx.reply(
+      '🎤 <i>Transcribiendo audio...</i>',
+      { parse_mode: 'HTML' }
+    );
+
+    // Importar función de transcripción
+    const { transcribeAudio } = await import('../ai/audio');
+
+    // Transcribir el audio
+    const transcription = await transcribeAudio(env, voice.file_id);
+
+    // Eliminar mensaje de procesamiento
+    try {
+      await ctx.api.deleteMessage(ctx.chat!.id, processingMsg.message_id);
+    } catch (e) {
+      // Si no se puede eliminar, no es crítico
+      console.log('No se pudo eliminar mensaje de procesamiento:', e);
+    }
+
+    // Mostrar la transcripción al usuario
+    await ctx.reply(
+      `🎤 <b>Audio transcrito:</b>\n\n<i>"${transcription}"</i>\n\n` +
+      `<i>Procesando tu mensaje...</i>`,
+      { parse_mode: 'HTML' }
+    );
+
+    // Procesar la transcripción como si fuera un mensaje de texto normal
+    await ctx.replyWithChatAction('typing');
+
+    // Obtener historial de conversación
+    const history = await getConversationHistory(env, userId);
+
+    // Procesar con AI
+    const response = await processMessage(env, transcription, history);
+
+    // Detectar múltiples opciones (igual que en handleMessage)
+    const multipleOptions = detectMultipleOptions(response);
+
+    if (multipleOptions.hasMultiple) {
+      await addMessageToHistory(env, userId, 'user', transcription);
+
+      if (multipleOptions.type === 'product') {
+        const { products, action, args } = multipleOptions.data;
+
+        savePendingSelection(userId, {
+          type: 'product',
+          action,
+          options: products,
+          originalMessage: transcription,
+          args,
+          timestamp: Date.now()
+        });
+
+        const selectionMessage = formatSelectionMessage('product', products.length, action);
+        const keyboard = productSelectionKeyboard(products, 'select_product');
+
+        await ctx.reply(selectionMessage, { reply_markup: keyboard });
+      } else if (multipleOptions.type === 'client') {
+        const { clients, action, args } = multipleOptions.data;
+
+        savePendingSelection(userId, {
+          type: 'client',
+          action,
+          options: clients,
+          originalMessage: transcription,
+          args,
+          timestamp: Date.now()
+        });
+
+        const selectionMessage = formatSelectionMessage('client', clients.length, action);
+        const keyboard = clientSelectionKeyboard(clients, 'select_client');
+
+        await ctx.reply(selectionMessage, { reply_markup: keyboard });
+      }
+    } else if (response.includes('NECESITA_CONFIRMACION:')) {
+      if (response.includes('NECESITA_CONFIRMACION:PAGO')) {
+        savePendingAction(userId, {
+          type: 'payment_confirmation',
+          data: { originalMessage: transcription }
+        });
+
+        const keyboard = paymentStatusKeyboard();
+        await ctx.reply('¿El cliente pagó o va a cuenta corriente?', { reply_markup: keyboard });
+      } else {
+        const cleanMessage = response.replace(/NECESITA_CONFIRMACION:\w+\s*/g, '').trim();
+        await ctx.reply(cleanMessage || '¿Confirmás?', { parse_mode: 'HTML' });
+      }
+    } else if (response.includes('¿Cuándo vence esta deuda?')) {
+      const keyboard = deadlineQuickSelectKeyboard();
+      await ctx.reply(response, { reply_markup: keyboard, parse_mode: 'HTML' });
+    } else {
+      await addMessageToHistory(env, userId, 'user', transcription);
+      await addMessageToHistory(env, userId, 'assistant', response);
+      await ctx.reply(response, { parse_mode: 'HTML' });
+    }
+
+  } catch (error: any) {
+    console.error('Error en handleVoice:', error);
+    console.error('Stack:', error.stack);
+
+    await ctx.reply(
+      '❌ <b>Error procesando audio</b>\n\n' +
+      'No pude transcribir tu mensaje de voz.\n\n' +
+      '<i>Intentá de nuevo o escribime por texto.</i>\n\n' +
+      `<code>${error.message || 'Error desconocido'}</code>`,
+      { parse_mode: 'HTML' }
+    );
+  }
+}
+
+/**
+ * Handler para mensajes de audio (archivos de audio)
+ * Similar a handleVoice pero para archivos de audio adjuntos
+ */
+export async function handleAudio(ctx: Context, env: Env) {
+  const userId = ctx.from?.id;
+  if (!userId) {
+    return;
+  }
+
+  const audio = ctx.message?.audio;
+  if (!audio) {
+    return;
+  }
+
+  try {
+    // Mostrar indicador de "escribiendo..." mientras se procesa
+    await ctx.replyWithChatAction('typing');
+
+    // Mostrar mensaje temporal de procesamiento
+    const processingMsg = await ctx.reply(
+      '🎵 <i>Transcribiendo archivo de audio...</i>',
+      { parse_mode: 'HTML' }
+    );
+
+    // Importar función de transcripción
+    const { transcribeAudio } = await import('../ai/audio');
+
+    // Transcribir el audio
+    const transcription = await transcribeAudio(env, audio.file_id);
+
+    // Eliminar mensaje de procesamiento
+    try {
+      await ctx.api.deleteMessage(ctx.chat!.id, processingMsg.message_id);
+    } catch (e) {
+      console.log('No se pudo eliminar mensaje de procesamiento:', e);
+    }
+
+    // Mostrar la transcripción al usuario
+    await ctx.reply(
+      `🎵 <b>Audio transcrito:</b>\n\n<i>"${transcription}"</i>\n\n` +
+      `<i>Procesando tu mensaje...</i>`,
+      { parse_mode: 'HTML' }
+    );
+
+    // Procesar la transcripción como si fuera un mensaje de texto normal
+    await ctx.replyWithChatAction('typing');
+
+    // Obtener historial de conversación
+    const history = await getConversationHistory(env, userId);
+
+    // Procesar con AI
+    const response = await processMessage(env, transcription, history);
+
+    // Detectar múltiples opciones (igual que en handleMessage)
+    const multipleOptions = detectMultipleOptions(response);
+
+    if (multipleOptions.hasMultiple) {
+      await addMessageToHistory(env, userId, 'user', transcription);
+
+      if (multipleOptions.type === 'product') {
+        const { products, action, args } = multipleOptions.data;
+
+        savePendingSelection(userId, {
+          type: 'product',
+          action,
+          options: products,
+          originalMessage: transcription,
+          args,
+          timestamp: Date.now()
+        });
+
+        const selectionMessage = formatSelectionMessage('product', products.length, action);
+        const keyboard = productSelectionKeyboard(products, 'select_product');
+
+        await ctx.reply(selectionMessage, { reply_markup: keyboard });
+      } else if (multipleOptions.type === 'client') {
+        const { clients, action, args } = multipleOptions.data;
+
+        savePendingSelection(userId, {
+          type: 'client',
+          action,
+          options: clients,
+          originalMessage: transcription,
+          args,
+          timestamp: Date.now()
+        });
+
+        const selectionMessage = formatSelectionMessage('client', clients.length, action);
+        const keyboard = clientSelectionKeyboard(clients, 'select_client');
+
+        await ctx.reply(selectionMessage, { reply_markup: keyboard });
+      }
+    } else if (response.includes('NECESITA_CONFIRMACION:')) {
+      if (response.includes('NECESITA_CONFIRMACION:PAGO')) {
+        savePendingAction(userId, {
+          type: 'payment_confirmation',
+          data: { originalMessage: transcription }
+        });
+
+        const keyboard = paymentStatusKeyboard();
+        await ctx.reply('¿El cliente pagó o va a cuenta corriente?', { reply_markup: keyboard });
+      } else {
+        const cleanMessage = response.replace(/NECESITA_CONFIRMACION:\w+\s*/g, '').trim();
+        await ctx.reply(cleanMessage || '¿Confirmás?', { parse_mode: 'HTML' });
+      }
+    } else if (response.includes('¿Cuándo vence esta deuda?')) {
+      const keyboard = deadlineQuickSelectKeyboard();
+      await ctx.reply(response, { reply_markup: keyboard, parse_mode: 'HTML' });
+    } else {
+      await addMessageToHistory(env, userId, 'user', transcription);
+      await addMessageToHistory(env, userId, 'assistant', response);
+      await ctx.reply(response, { parse_mode: 'HTML' });
+    }
+
+  } catch (error: any) {
+    console.error('Error en handleAudio:', error);
+    console.error('Stack:', error.stack);
+
+    await ctx.reply(
+      '❌ <b>Error procesando audio</b>\n\n' +
+      'No pude transcribir tu archivo de audio.\n\n' +
+      '<i>Intentá de nuevo o escribime por texto.</i>\n\n' +
+      `<code>${error.message || 'Error desconocido'}</code>`,
+      { parse_mode: 'HTML' }
+    );
+  }
 }
 
 /**
