@@ -32,13 +32,16 @@ async function downloadTelegramFile(fileId: string, token: string): Promise<Arra
 }
 
 /**
- * Convierte audio de Telegram (OGG/OPUS) a formato compatible con Whisper
- * Nota: Whisper en Workers AI acepta varios formatos incluyendo OGG
+ * Convierte ArrayBuffer a Base64
+ * Workers AI Whisper requiere el audio como cadena Base64
  */
-function prepareAudioForWhisper(audioBuffer: ArrayBuffer): Uint8Array {
-  // Workers AI Whisper puede procesar OGG directamente
-  // Si necesitáramos convertir el formato, lo haríamos aquí
-  return new Uint8Array(audioBuffer);
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 /**
@@ -55,9 +58,9 @@ export async function transcribeAudio(
     const audioBuffer = await downloadTelegramFile(fileId, env.TELEGRAM_BOT_TOKEN);
     console.log(`✓ Audio descargado: ${audioBuffer.byteLength} bytes`);
 
-    // 2. Preparar el audio para Whisper
-    const audioData = prepareAudioForWhisper(audioBuffer);
-    console.log(`✓ Audio preparado para transcripción`);
+    // 2. Convertir el audio a Base64 (requerido por Workers AI Whisper)
+    const audioBase64 = arrayBufferToBase64(audioBuffer);
+    console.log(`✓ Audio convertido a Base64: ${audioBase64.length} caracteres`);
 
     // 3. Llamar a Whisper en Workers AI
     // Usando whisper-large-v3-turbo para mejor velocidad y precisión
@@ -65,8 +68,8 @@ export async function transcribeAudio(
     const response: any = await env.AI.run(
       '@cf/openai/whisper-large-v3-turbo',
       {
-        audio: Array.from(audioData) as any, // Convertir Uint8Array a array normal para Workers AI
-      } as any
+        audio: audioBase64, // Base64 string como requiere Workers AI
+      }
     );
 
     console.log('Whisper response:', JSON.stringify(response).substring(0, 200));
